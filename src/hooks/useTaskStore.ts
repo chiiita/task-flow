@@ -86,6 +86,7 @@ export function useTaskStore() {
   const [today, setToday] = useState(todayStr());
   const [cloudStatus, setCloudStatus] = useState<"offline" | "syncing" | "synced" | "error">("offline");
   const applyingRemoteRef = useRef(false); // 購読由来の更新フラグ（クラウド書き込みを抑制）
+  const cloudReadyRef = useRef(false); // 初回スナップショット受信後に true。これが false の間はクラウドへ書き込まない
 
   // Auto-update at midnight
   useEffect(() => {
@@ -104,42 +105,55 @@ export function useTaskStore() {
   useEffect(() => { if (loaded) save("tm_theme", theme); }, [theme, loaded]);
 
   // ─────────── ☁️ クラウド同期 ───────────
-  // ログイン時にFirestoreを購読。クラウドが空なら現在のローカルをアップロード（初回移行）。
-  // 以降はクラウドを正として反映。
+  // 重要な不変条件:
+  //   - 初回Firestoreスナップショットを受信するまでクラウドへ書き込まない。
+  //     そうしないと空のローカル状態で既存のクラウドデータを上書きするリスクがある
+  //     （別端末ログイン時に起きる典型バグ）。
   useEffect(() => {
     if (!firebaseEnabled || !user || !loaded) {
-      setCloudStatus(firebaseEnabled ? "offline" : "offline");
+      setCloudStatus("offline");
+      cloudReadyRef.current = false;
       return;
     }
     setCloudStatus("syncing");
+    cloudReadyRef.current = false;
     let firstSnapshot = true;
+
     const unsub = subscribeCloudData(user.uid, (cloud) => {
-      if (!cloud) {
-        // 初回移行: ローカル→クラウドへアップ（既存データを保持）
-        if (firstSnapshot) {
+      if (cloud && (cloud.recurring?.length || cloud.oneOff?.length || cloud.completions?.length)) {
+        // クラウドにデータあり → 状態に反映
+        applyingRemoteRef.current = true;
+        setRecurring(cloud.recurring || []);
+        setCompletions(cloud.completions || []);
+        setOneOff(cloud.oneOff || []);
+        if (cloud.theme) setThemeState(cloud.theme);
+        queueMicrotask(() => { applyingRemoteRef.current = false; });
+      } else if (firstSnapshot) {
+        // 初回スナップショットでクラウドが空 → ローカルにデータあれば一度だけアップロード
+        const hasLocalData =
+          recurring.length > 0 || oneOff.length > 0 || completions.length > 0;
+        if (hasLocalData) {
           saveCloudData(user.uid, { recurring, completions, oneOff, theme });
-          setCloudStatus("synced");
-          firstSnapshot = false;
         }
-        return;
+        // ローカルも空なら何もしない（上書き事故を防ぐ）
       }
-      applyingRemoteRef.current = true;
-      setRecurring(cloud.recurring || []);
-      setCompletions(cloud.completions || []);
-      setOneOff(cloud.oneOff || []);
-      if (cloud.theme) setThemeState(cloud.theme);
-      setCloudStatus("synced");
       firstSnapshot = false;
-      // 次tickでフラグを戻す（effectsが走った後）
-      queueMicrotask(() => { applyingRemoteRef.current = false; });
+      cloudReadyRef.current = true;
+      setCloudStatus("synced");
     });
-    return () => { unsub(); setCloudStatus("offline"); };
+
+    return () => {
+      unsub();
+      cloudReadyRef.current = false;
+      setCloudStatus("offline");
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, loaded]);
 
-  // ログイン中はローカル変更をクラウドへ反映
+  // ログイン中はローカル変更をクラウドへ反映（ただしクラウド準備完了後のみ）
   useEffect(() => {
     if (!firebaseEnabled || !user || !loaded) return;
+    if (!cloudReadyRef.current) return; // 初回スナップショット前は書き込まない
     if (applyingRemoteRef.current) return; // 購読からの更新エコーを無視
     saveCloudData(user.uid, { recurring, completions, oneOff, theme });
     // eslint-disable-next-line react-hooks/exhaustive-deps
