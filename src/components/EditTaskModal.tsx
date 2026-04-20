@@ -26,6 +26,7 @@ export default function EditTaskModal({ target, store, onClose }: Props) {
   const [title, setTitle] = useState(task.title);
   const [category, setCategory] = useState<Category>(task.category);
   const [memo, setMemo] = useState(task.memo || "");
+  const [duration, setDuration] = useState<string>(task.duration ? String(task.duration) : "");
 
   // Recurring-specific
   const recTask = isRec ? task as RecurringTask : null;
@@ -45,17 +46,18 @@ export default function EditTaskModal({ target, store, onClose }: Props) {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    const dur = duration.trim() ? Math.max(0, Math.min(999, parseInt(duration, 10) || 0)) : undefined;
 
     if (isRec) {
       store.updateRecurring(task.id, {
-        title: title.trim(), category, frequency, timeSlot, memo: memo.trim() || undefined,
-        days: frequency === "weekday" || frequency === "weekly" ? selectedDays : undefined,
+        title: title.trim(), category, frequency, timeSlot, memo: memo.trim() || undefined, duration: dur,
+        days: frequency === "weekday" || frequency === "weekly" || frequency === "biweekly" ? selectedDays : undefined,
         monthDay: frequency === "monthly" ? monthDay : undefined,
       });
     } else {
       store.updateOneOff(task.id, {
         title: title.trim(), category, priority, isToday,
-        deadline: deadline || undefined, memo: memo.trim() || undefined,
+        deadline: deadline || undefined, memo: memo.trim() || undefined, duration: dur,
       });
     }
     onClose();
@@ -107,16 +109,18 @@ export default function EditTaskModal({ target, store, onClose }: Props) {
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">頻度</label>
-              <div className="grid grid-cols-4 gap-2">
-                {([{ id: "daily" as Frequency, l: "毎日" }, { id: "weekday" as Frequency, l: "曜日別" }, { id: "weekly" as Frequency, l: "毎週" }, { id: "monthly" as Frequency, l: "毎月" }]).map((f) => (
+              <div className="grid grid-cols-5 gap-2">
+                {([{ id: "daily" as Frequency, l: "毎日" }, { id: "weekday" as Frequency, l: "曜日別" }, { id: "weekly" as Frequency, l: "毎週" }, { id: "biweekly" as Frequency, l: "隔週" }, { id: "monthly" as Frequency, l: "毎月" }]).map((f) => (
                   <button key={f.id} type="button" onClick={() => setFrequency(f.id)}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-medium border transition-all ${frequency === f.id ? "border-accent bg-accent/15 text-accent" : "border-border-subtle text-text-secondary"}`}>{f.l}</button>
+                    className={`px-2 py-2.5 rounded-xl text-xs font-medium border transition-all ${frequency === f.id ? "border-accent bg-accent/15 text-accent" : "border-border-subtle text-text-secondary"}`}>{f.l}</button>
                 ))}
               </div>
             </div>
-            {(frequency === "weekday" || frequency === "weekly") && (
+            {(frequency === "weekday" || frequency === "weekly" || frequency === "biweekly") && (
               <div>
-                <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">曜日</label>
+                <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">
+                  曜日{frequency === "biweekly" ? "（偶数週のみ発動）" : ""}
+                </label>
                 <div className="flex gap-2">{WEEKDAYS.map((label, i) => (
                   <button key={i} type="button" onClick={() => toggleDay(i)}
                     className={`w-10 h-10 rounded-xl text-xs font-semibold border transition-all ${selectedDays.includes(i) ? "border-accent bg-accent text-white" : "border-border-subtle text-text-secondary"}`}>{label}</button>
@@ -159,7 +163,16 @@ export default function EditTaskModal({ target, store, onClose }: Props) {
           </>)}
 
           <div>
-            <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">メモ</label>
+            <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">所要分（任意・0〜999）</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} max={999} value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="例: 30"
+                className="w-24 px-4 py-2.5 rounded-xl border border-border-medium bg-bg-primary text-sm text-text-primary text-center focus:outline-none focus:border-accent" />
+              <span className="text-sm text-text-muted">分</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">メモ（□/☑でサブタスク進捗）</label>
             <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2}
               className="w-full px-4 py-2.5 rounded-xl border border-border-medium bg-bg-primary text-sm text-text-primary focus:outline-none focus:border-accent resize-none" />
           </div>

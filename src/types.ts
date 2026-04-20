@@ -8,7 +8,7 @@ export const CATEGORIES: { id: Category; label: string; color: string; gradient:
   { id: "other", label: "その他", color: "#64748b", gradient: "linear-gradient(135deg, #64748b, #94a3b8)" },
 ];
 
-export type Frequency = "daily" | "weekday" | "weekly" | "monthly";
+export type Frequency = "daily" | "weekday" | "weekly" | "biweekly" | "monthly";
 
 export const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -50,6 +50,7 @@ export interface RecurringTask {
   days?: number[];
   monthDay?: number;
   memo?: string;
+  duration?: number; // 所要分
   sortOrder?: number;
   createdAt: string;
 }
@@ -67,6 +68,7 @@ export interface OneOffTask {
   isToday: boolean;
   deadline?: string; // YYYY-MM-DD
   memo?: string;
+  duration?: number; // 所要分
   sortOrder?: number;
   createdAt: string;
   completedAt?: string; // YYYY-MM-DD — set when done, not deleted

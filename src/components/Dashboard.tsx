@@ -1,7 +1,15 @@
 import { useState, useCallback, type ReactNode } from "react";
-import { CATEGORIES, Category, PRIORITY_LABELS, PRIORITY_STYLES, Priority, TIME_SLOTS, RecurringTask, OneOffTask } from "../types";
-import { useTaskStore, formatDate } from "../hooks/useTaskStore";
+import { CATEGORIES, Category, PRIORITY_LABELS, PRIORITY_STYLES, Priority, TIME_SLOTS, RecurringTask, OneOffTask, TimeSlot } from "../types";
+import { useTaskStore, formatDate, calcSubtaskProgress } from "../hooks/useTaskStore";
 import { BriefcaseIcon, BookIcon, UserIcon, HeartIcon, TagIcon, CheckIcon, FireIcon, ChartIcon, PlusIcon } from "./Icons";
+
+function currentTimeSlot(): TimeSlot {
+  const h = new Date().getHours();
+  if (h < 11) return "morning";
+  if (h < 16) return "afternoon";
+  if (h < 19) return "evening";
+  return "night";
+}
 
 const CATEGORY_ICONS: Record<Category, ReactNode> = {
   work: <BriefcaseIcon className="w-5 h-5" />, skill: <BookIcon className="w-5 h-5" />,
@@ -67,12 +75,72 @@ export default function Dashboard({ store, onNavigate, onAdd, onEdit }: Props) {
     setDragId(null);
   }, [dragId, todayRec, todayOff, store]);
 
+  // 今すぐセクション用: 現在時間帯 + allday の未完了タスク
+  const nowSlot = currentTimeSlot();
+  const SLOT_LABEL: Record<TimeSlot, string> = { allday: "1日", morning: "朝", afternoon: "昼", evening: "夕", night: "夜" };
+  const nowRecurring = todayRec.filter((t) => !store.isRecurringDone(t.id) && (t.timeSlot === nowSlot || t.timeSlot === "allday"));
+  const nowOneOff = todayOff.filter((t) => !t.completedAt);
+  const nowTotalMin = [
+    ...nowRecurring.map((t) => t.duration || 0),
+    ...nowOneOff.map((t) => t.duration || 0),
+  ].reduce((a, b) => a + b, 0);
+
+  // 振り返り: 直近7日 / 30日の完了数
+  const week = store.getRecentStats(7);
+  const month = store.getRecentStats(30);
+  const weekTotal = week.reduce((a, b) => a + b.count, 0);
+  const monthTotal = month.reduce((a, b) => a + b.count, 0);
+  const weekMax = Math.max(...week.map((d) => d.count), 1);
+  const monthMax = Math.max(...month.map((d) => d.count), 1);
+
   return (
     <div className="space-y-8">
       <div className="hidden md:block">
         <h1 className="text-2xl font-bold text-text-primary">ダッシュボード</h1>
         <p className="text-text-muted mt-1 text-sm">今日のタスクを一覧で確認</p>
       </div>
+
+      {/* ⚡ 今すぐ */}
+      {(nowRecurring.length + nowOneOff.length > 0) && (
+        <div className="rounded-2xl p-6 text-white shadow-xl" style={{ background: "linear-gradient(135deg, var(--accent), var(--accent))", backgroundImage: "var(--accent-gradient)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.25 0L3 13h7L9 24l8-13h-7l1-11z"/></svg>
+              <h2 className="font-bold text-sm tracking-wider">今すぐ（{SLOT_LABEL[nowSlot]}）</h2>
+            </div>
+            <span className="text-xs opacity-90 tabular-nums">
+              {nowRecurring.length + nowOneOff.length}件{nowTotalMin > 0 ? ` / 合計${nowTotalMin}分` : ""}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {nowRecurring.slice(0, 6).map((t) => {
+              const sub = calcSubtaskProgress(t.memo);
+              return (
+                <div key={t.id} className="flex items-center gap-2 bg-white/15 rounded-lg px-3 py-2 backdrop-blur-sm">
+                  <button onClick={() => store.toggleRecurringCompletion(t.id)} className="w-4 h-4 rounded border-2 border-white/60 hover:bg-white/30 flex-shrink-0" />
+                  <span className="text-sm flex-1 truncate">🔁 {t.title}</span>
+                  {t.duration && <span className="text-[10px] opacity-80 tabular-nums">{t.duration}分</span>}
+                  {sub && <span className="text-[10px] opacity-90">({sub.done}/{sub.total})</span>}
+                </div>
+              );
+            })}
+            {nowOneOff.slice(0, 6 - nowRecurring.length).map((t) => {
+              const sub = calcSubtaskProgress(t.memo);
+              return (
+                <div key={t.id} className="flex items-center gap-2 bg-white/15 rounded-lg px-3 py-2 backdrop-blur-sm">
+                  <button onClick={() => store.completeOneOff(t.id)} className="w-4 h-4 rounded border-2 border-white/60 hover:bg-white/30 flex-shrink-0" />
+                  <span className="text-sm flex-1 truncate">📌 {t.title}</span>
+                  {t.duration && <span className="text-[10px] opacity-80 tabular-nums">{t.duration}分</span>}
+                  {sub && <span className="text-[10px] opacity-90">({sub.done}/{sub.total})</span>}
+                </div>
+              );
+            })}
+            {(nowRecurring.length + nowOneOff.length > 6) && (
+              <div className="text-[11px] opacity-80 text-center pt-1">… 他 {nowRecurring.length + nowOneOff.length - 6} 件</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 統計 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -98,6 +166,41 @@ export default function Dashboard({ store, onNavigate, onAdd, onEdit }: Props) {
           <h3 className="text-xs font-semibold text-text-muted tracking-wider mb-3">連続達成中</h3>
           <div className="flex flex-wrap gap-3">
             {topStreaks.map(({ task, streak }) => (<div key={task.id} className="flex items-center gap-2 bg-accent-green/10 text-accent-green rounded-xl px-3 py-2"><FireIcon className="w-4 h-4" /><span className="text-sm font-semibold">{streak}日</span><span className="text-xs text-accent-green/70">{task.title}</span></div>))}
+          </div>
+        </div>
+      )}
+
+      {/* 📊 振り返り */}
+      {(weekTotal > 0 || monthTotal > 0) && (
+        <div className="glass-card rounded-2xl p-5">
+          <h3 className="text-xs font-semibold text-text-muted tracking-wider mb-4">📊 振り返り</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-text-secondary">今週（過去7日）</span>
+                <span className="text-xs text-text-muted tabular-nums">{weekTotal}件 · 平均{(weekTotal / 7).toFixed(1)}/日</span>
+              </div>
+              <div className="flex items-end gap-1 h-10">
+                {week.map((d) => (
+                  <div key={d.date} className="flex-1 bg-bg-elevated rounded-sm overflow-hidden flex items-end" title={`${d.date.slice(5)}: ${d.count}件`}>
+                    <div className="w-full rounded-sm" style={{ height: `${(d.count / weekMax) * 100}%`, background: "var(--accent-gradient)" }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-text-secondary">今月（過去30日）</span>
+                <span className="text-xs text-text-muted tabular-nums">{monthTotal}件 · 平均{(monthTotal / 30).toFixed(1)}/日</span>
+              </div>
+              <div className="flex items-end gap-[2px] h-10">
+                {month.map((d) => (
+                  <div key={d.date} className="flex-1 bg-bg-elevated rounded-sm overflow-hidden flex items-end" title={`${d.date.slice(5)}: ${d.count}件`}>
+                    <div className="w-full rounded-sm" style={{ height: `${(d.count / monthMax) * 100}%`, background: "var(--accent-gradient)" }} />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -156,8 +259,10 @@ export default function Dashboard({ store, onNavigate, onAdd, onEdit }: Props) {
                           {done && <CheckIcon />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className={`text-sm cursor-pointer hover:text-accent transition-colors ${done ? "line-through" : "text-text-primary"}`} onClick={() => onEdit({ type: "recurring", task })}>{task.title}</span>
+                            {task.duration && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 font-semibold tabular-nums">{task.duration}分</span>}
+                            {(() => { const sub = calcSubtaskProgress(task.memo); return sub ? <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-semibold tabular-nums">▢ {sub.done}/{sub.total}</span> : null; })()}
                             {streak >= 3 && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-accent-green/10 text-accent-green font-semibold">{streak}日連続</span>}
                           </div>
                           {task.memo && <MemoButton id={task.id} memo={task.memo} expanded={expandedMemo} setExpanded={setExpandedMemo} />}
@@ -193,7 +298,11 @@ export default function Dashboard({ store, onNavigate, onAdd, onEdit }: Props) {
                     {done ? <CheckIcon /> : <CheckIcon className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
                   </button>
                   <div className="flex-1 min-w-0">
-                    <span className={`text-sm cursor-pointer hover:text-accent transition-colors ${done ? "line-through" : "text-text-primary"}`} onClick={() => onEdit({ type: "oneoff", task })}>{task.title}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-sm cursor-pointer hover:text-accent transition-colors ${done ? "line-through" : "text-text-primary"}`} onClick={() => onEdit({ type: "oneoff", task })}>{task.title}</span>
+                      {task.duration && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 font-semibold tabular-nums">{task.duration}分</span>}
+                      {(() => { const sub = calcSubtaskProgress(task.memo); return sub ? <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-semibold tabular-nums">▢ {sub.done}/{sub.total}</span> : null; })()}
+                    </div>
                     {task.memo && <MemoButton id={task.id} memo={task.memo} expanded={expandedMemo} setExpanded={setExpandedMemo} />}
                     {task.deadline && <span className="text-[10px] text-text-muted block mt-0.5">期限: {formatDate(task.deadline)}</span>}
                   </div>

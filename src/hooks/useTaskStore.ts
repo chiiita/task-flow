@@ -58,6 +58,29 @@ function save(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+// ISO 週番号（月曜始まり）
+export function getISOWeek(d: Date): number {
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / (7 * 24 * 3600 * 1000));
+}
+
+// サブタスク進捗（メモ欄の □=未完 / ☑✅=完了 をカウント）
+export function calcSubtaskProgress(memo: string | undefined): { done: number; total: number } | null {
+  if (!memo) return null;
+  const done = (memo.match(/[☑✅]/g) || []).length;
+  const undone = (memo.match(/□/g) || []).length;
+  const total = done + undone;
+  if (total === 0) return null;
+  return { done, total };
+}
+
 // Check if a recurring task is scheduled on a specific date
 export function isScheduledOnDate(task: RecurringTask, date: Date): boolean {
   const dow = date.getDay();
@@ -69,6 +92,10 @@ export function isScheduledOnDate(task: RecurringTask, date: Date): boolean {
       return task.days ? task.days.includes(dow) : false;
     case "weekly":
       return task.days ? task.days.includes(dow) : dow === 1;
+    case "biweekly":
+      // 偶数週の指定曜日のみ（ISO週番号ベース）
+      if (!task.days?.includes(dow)) return false;
+      return getISOWeek(date) % 2 === 0;
     case "monthly":
       return task.monthDay === dom;
     default:
@@ -85,8 +112,8 @@ export function useTaskStore() {
   const [loaded, setLoaded] = useState(false);
   const [today, setToday] = useState(todayStr());
   const [cloudStatus, setCloudStatus] = useState<"offline" | "syncing" | "synced" | "error">("offline");
-  const applyingRemoteRef = useRef(false); // 購読由来の更新フラグ（クラウド書き込みを抑制）
-  const cloudReadyRef = useRef(false); // 初回スナップショット受信後に true。これが false の間はクラウドへ書き込まない
+  const cloudReadyRef = useRef(false); // 初回スナップショット受信後に true
+  const lastCloudJsonRef = useRef<string>(""); // 最後にクラウドへ書いた/受信したデータのJSON。無限ループ防止
 
   // Auto-update at midnight
   useEffect(() => {
@@ -120,22 +147,25 @@ export function useTaskStore() {
     let firstSnapshot = true;
 
     const unsub = subscribeCloudData(user.uid, (cloud) => {
-      if (cloud && (cloud.recurring?.length || cloud.oneOff?.length || cloud.completions?.length)) {
-        // クラウドにデータあり → 状態に反映
-        applyingRemoteRef.current = true;
-        setRecurring(cloud.recurring || []);
-        setCompletions(cloud.completions || []);
-        setOneOff(cloud.oneOff || []);
+      if (cloud) {
+        // クラウドにドキュメントが存在する（空配列でも反映する。別端末での削除も伝播させる）
+        const r = cloud.recurring || [];
+        const c = cloud.completions || [];
+        const o = cloud.oneOff || [];
+        const t = cloud.theme || theme;
+        // 最後に受信したクラウドデータのJSONを保存（無限ループ/エコー抑制用）
+        lastCloudJsonRef.current = JSON.stringify({ recurring: r, completions: c, oneOff: o, theme: t });
+        setRecurring(r);
+        setCompletions(c);
+        setOneOff(o);
         if (cloud.theme) setThemeState(cloud.theme);
-        queueMicrotask(() => { applyingRemoteRef.current = false; });
       } else if (firstSnapshot) {
-        // 初回スナップショットでクラウドが空 → ローカルにデータあれば一度だけアップロード
+        // ドキュメントが存在しない & 初回のみ → ローカルに非空データあればアップロード
         const hasLocalData =
           recurring.length > 0 || oneOff.length > 0 || completions.length > 0;
         if (hasLocalData) {
           saveCloudData(user.uid, { recurring, completions, oneOff, theme });
         }
-        // ローカルも空なら何もしない（上書き事故を防ぐ）
       }
       firstSnapshot = false;
       cloudReadyRef.current = true;
@@ -151,10 +181,13 @@ export function useTaskStore() {
   }, [user?.uid, loaded]);
 
   // ログイン中はローカル変更をクラウドへ反映（ただしクラウド準備完了後のみ）
+  // 最後に受信/送信したクラウドデータと一致する場合はスキップ（無限ループ防止）
   useEffect(() => {
     if (!firebaseEnabled || !user || !loaded) return;
-    if (!cloudReadyRef.current) return; // 初回スナップショット前は書き込まない
-    if (applyingRemoteRef.current) return; // 購読からの更新エコーを無視
+    if (!cloudReadyRef.current) return;
+    const currentJson = JSON.stringify({ recurring, completions, oneOff, theme });
+    if (currentJson === lastCloudJsonRef.current) return;
+    lastCloudJsonRef.current = currentJson;
     saveCloudData(user.uid, { recurring, completions, oneOff, theme });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recurring, completions, oneOff, theme, user?.uid, loaded]);
@@ -163,10 +196,10 @@ export function useTaskStore() {
 
   // --- Recurring tasks ---
   const addRecurring = useCallback(
-    (title: string, category: Category, frequency: Frequency, timeSlot: TimeSlot, days?: number[], monthDay?: number, memo?: string) => {
+    (title: string, category: Category, frequency: Frequency, timeSlot: TimeSlot, days?: number[], monthDay?: number, memo?: string, duration?: number) => {
       setRecurring((prev) => [
         ...prev,
-        { id: genId(), title, category, frequency, timeSlot, days, monthDay, memo, createdAt: todayStr() },
+        { id: genId(), title, category, frequency, timeSlot, days, monthDay, memo, duration, createdAt: todayStr() },
       ]);
     },
     []
@@ -216,10 +249,10 @@ export function useTaskStore() {
 
   // --- One-off tasks ---
   const addOneOff = useCallback(
-    (title: string, category: Category, priority: Priority, isToday: boolean, deadline?: string, memo?: string) => {
+    (title: string, category: Category, priority: Priority, isToday: boolean, deadline?: string, memo?: string, duration?: number) => {
       setOneOff((prev) => [
         ...prev,
-        { id: genId(), title, category, priority, isToday, deadline, memo, createdAt: todayStr() },
+        { id: genId(), title, category, priority, isToday, deadline, memo, duration, createdAt: todayStr() },
       ]);
     },
     []
@@ -362,6 +395,21 @@ export function useTaskStore() {
       });
   }, [oneOff, today]);
 
+  // --- 振り返り（週次/月次の日別完了数） ---
+  const getRecentStats = useCallback((days: number) => {
+    const now = new Date();
+    const result: { date: string; count: number }[] = [];
+    // 定期タスクの完了
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const recCount = completions.filter((c) => c.date === ds).length;
+      const offCount = oneOff.filter((t) => t.completedAt === ds).length;
+      result.push({ date: ds, count: recCount + offCount });
+    }
+    return result;
+  }, [completions, oneOff]);
+
   // --- Export / Import ---
   const exportData = useCallback(() => {
     const data = {
@@ -455,6 +503,7 @@ export function useTaskStore() {
     getStreak,
     getDateSummary,
     getDeadlineTasks,
+    getRecentStats,
     exportData,
     importData,
   };

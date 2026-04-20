@@ -22,18 +22,20 @@ export default function AddTaskModal({ type, defaultCategory, store, onClose }: 
   const [isToday, setIsToday] = useState(true);
   const [deadline, setDeadline] = useState("");
   const [memo, setMemo] = useState("");
+  const [duration, setDuration] = useState<string>("");
 
   const toggleDay = (d: number) => setSelectedDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    const dur = duration.trim() ? Math.max(0, Math.min(999, parseInt(duration, 10) || 0)) : undefined;
     if (type === "recurring") {
       store.addRecurring(title.trim(), category, frequency, timeSlot,
-        frequency === "weekday" || frequency === "weekly" ? selectedDays : undefined,
-        frequency === "monthly" ? monthDay : undefined, memo.trim() || undefined);
+        frequency === "weekday" || frequency === "weekly" || frequency === "biweekly" ? selectedDays : undefined,
+        frequency === "monthly" ? monthDay : undefined, memo.trim() || undefined, dur);
     } else {
-      store.addOneOff(title.trim(), category, priority, isToday, deadline || undefined, memo.trim() || undefined);
+      store.addOneOff(title.trim(), category, priority, isToday, deadline || undefined, memo.trim() || undefined, dur);
     }
     onClose();
   };
@@ -84,16 +86,18 @@ export default function AddTaskModal({ type, defaultCategory, store, onClose }: 
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">頻度</label>
-              <div className="grid grid-cols-4 gap-2">
-                {([{ id: "daily" as Frequency, l: "毎日" }, { id: "weekday" as Frequency, l: "曜日別" }, { id: "weekly" as Frequency, l: "毎週" }, { id: "monthly" as Frequency, l: "毎月" }]).map((f) => (
+              <div className="grid grid-cols-5 gap-2">
+                {([{ id: "daily" as Frequency, l: "毎日" }, { id: "weekday" as Frequency, l: "曜日別" }, { id: "weekly" as Frequency, l: "毎週" }, { id: "biweekly" as Frequency, l: "隔週" }, { id: "monthly" as Frequency, l: "毎月" }]).map((f) => (
                   <button key={f.id} type="button" onClick={() => setFrequency(f.id)}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-medium border transition-all ${frequency === f.id ? "border-accent bg-accent/15 text-accent" : "border-border-subtle text-text-secondary"}`}>{f.l}</button>
+                    className={`px-2 py-2.5 rounded-xl text-xs font-medium border transition-all ${frequency === f.id ? "border-accent bg-accent/15 text-accent" : "border-border-subtle text-text-secondary"}`}>{f.l}</button>
                 ))}
               </div>
             </div>
-            {(frequency === "weekday" || frequency === "weekly") && (
+            {(frequency === "weekday" || frequency === "weekly" || frequency === "biweekly") && (
               <div>
-                <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">曜日を選択</label>
+                <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">
+                  曜日を選択{frequency === "biweekly" ? "（偶数週のみ発動）" : ""}
+                </label>
                 <div className="flex gap-2">{WEEKDAYS.map((label, i) => (
                   <button key={i} type="button" onClick={() => toggleDay(i)}
                     className={`w-10 h-10 rounded-xl text-xs font-semibold border transition-all ${selectedDays.includes(i) ? "border-accent bg-accent text-white" : "border-border-subtle text-text-secondary"}`}>{label}</button>
@@ -138,8 +142,17 @@ export default function AddTaskModal({ type, defaultCategory, store, onClose }: 
           </>)}
 
           <div>
-            <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">メモ（任意）</label>
-            <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="補足メモ..." rows={2}
+            <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">所要分（任意・0〜999）</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} max={999} value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="例: 30"
+                className="w-24 px-4 py-2.5 rounded-xl border border-border-medium bg-bg-primary text-sm text-text-primary text-center focus:outline-none focus:border-accent" />
+              <span className="text-sm text-text-muted">分</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary tracking-wider mb-2">メモ（任意・□/☑でサブタスク進捗）</label>
+            <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="例: □企画書 □構成 ☑本文" rows={2}
               className="w-full px-4 py-2.5 rounded-xl border border-border-medium bg-bg-primary text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent resize-none" />
           </div>
 
