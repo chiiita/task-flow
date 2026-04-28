@@ -58,6 +58,14 @@ function save(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+const LOCAL_UPDATED_AT_KEY = "tm_updatedAt";
+function readLocalUpdatedAt(): number {
+  return Number(localStorage.getItem(LOCAL_UPDATED_AT_KEY) || 0);
+}
+function writeLocalUpdatedAt(ts: number) {
+  localStorage.setItem(LOCAL_UPDATED_AT_KEY, String(ts));
+}
+
 // ISO 週番号（月曜始まり）
 export function getISOWeek(d: Date): number {
   const target = new Date(d.valueOf());
@@ -126,16 +134,20 @@ export function useTaskStore() {
   }, [today]);
 
   useEffect(() => setLoaded(true), []);
-  useEffect(() => { if (loaded) save("tm_recurring", recurring); }, [recurring, loaded]);
-  useEffect(() => { if (loaded) save("tm_completions", completions); }, [completions, loaded]);
-  useEffect(() => { if (loaded) save("tm_oneoff", oneOff); }, [oneOff, loaded]);
-  useEffect(() => { if (loaded) save("tm_theme", theme); }, [theme, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    save("tm_recurring", recurring);
+    save("tm_completions", completions);
+    save("tm_oneoff", oneOff);
+    save("tm_theme", theme);
+    writeLocalUpdatedAt(Date.now());
+  }, [recurring, completions, oneOff, theme, loaded]);
 
   // ─────────── ☁️ クラウド同期 ───────────
   // 重要な不変条件:
-  //   - 初回Firestoreスナップショットを受信するまでクラウドへ書き込まない。
-  //     そうしないと空のローカル状態で既存のクラウドデータを上書きするリスクがある
-  //     （別端末ログイン時に起きる典型バグ）。
+  //   - 初回Firestoreスナップショットでは local と cloud の updatedAt を比較し、
+  //     新しい方を採用する（古いcloudが新しいlocalを上書きするレースを防止）。
+  //   - cloudReadyRef が true になるまでに溜まった local 変更は、ready 後に push する。
   useEffect(() => {
     if (!firebaseEnabled || !user || !loaded) {
       setCloudStatus("offline");
@@ -148,23 +160,44 @@ export function useTaskStore() {
 
     const unsub = subscribeCloudData(user.uid, (cloud) => {
       if (cloud) {
-        // クラウドにドキュメントが存在する（空配列でも反映する。別端末での削除も伝播させる）
-        const r = cloud.recurring || [];
-        const c = cloud.completions || [];
-        const o = cloud.oneOff || [];
-        const t = cloud.theme || theme;
-        // 最後に受信したクラウドデータのJSONを保存（無限ループ/エコー抑制用）
-        lastCloudJsonRef.current = JSON.stringify({ recurring: r, completions: c, oneOff: o, theme: t });
-        setRecurring(r);
-        setCompletions(c);
-        setOneOff(o);
-        if (cloud.theme) setThemeState(cloud.theme);
+        const cloudUpdatedAt = cloud.updatedAt || 0;
+        const localUpdatedAt = readLocalUpdatedAt();
+
+        if (firstSnapshot && localUpdatedAt > cloudUpdatedAt) {
+          // ローカルがクラウドより新しい → クラウドを上書きせず local を push
+          // （ログイン直後/同期前にユーザーが追加したタスクをここで救済）
+          const payload = {
+            recurring: load<RecurringTask[]>("tm_recurring", []),
+            completions: load<RecurringCompletion[]>("tm_completions", []),
+            oneOff: load<OneOffTask[]>("tm_oneoff", []),
+            theme: load<ThemeId>("tm_theme", theme),
+          };
+          lastCloudJsonRef.current = JSON.stringify(payload);
+          saveCloudData(user.uid, payload);
+        } else {
+          // cloud を採用（同等 or cloudの方が新しい / 別端末からの更新）
+          const r = cloud.recurring || [];
+          const c = cloud.completions || [];
+          const o = cloud.oneOff || [];
+          const t = cloud.theme || theme;
+          lastCloudJsonRef.current = JSON.stringify({ recurring: r, completions: c, oneOff: o, theme: t });
+          setRecurring(r);
+          setCompletions(c);
+          setOneOff(o);
+          if (cloud.theme) setThemeState(cloud.theme);
+          // local の updatedAt を cloud に合わせる（次回比較を正しく行うため）
+          if (cloudUpdatedAt) writeLocalUpdatedAt(cloudUpdatedAt);
+        }
       } else if (firstSnapshot) {
         // ドキュメントが存在しない & 初回のみ → ローカルに非空データあればアップロード
-        const hasLocalData =
-          recurring.length > 0 || oneOff.length > 0 || completions.length > 0;
-        if (hasLocalData) {
-          saveCloudData(user.uid, { recurring, completions, oneOff, theme });
+        const localRec = load<RecurringTask[]>("tm_recurring", []);
+        const localOff = load<OneOffTask[]>("tm_oneoff", []);
+        const localComp = load<RecurringCompletion[]>("tm_completions", []);
+        if (localRec.length > 0 || localOff.length > 0 || localComp.length > 0) {
+          saveCloudData(user.uid, {
+            recurring: localRec, completions: localComp, oneOff: localOff,
+            theme: load<ThemeId>("tm_theme", theme),
+          });
         }
       }
       firstSnapshot = false;
@@ -180,8 +213,8 @@ export function useTaskStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, loaded]);
 
-  // ログイン中はローカル変更をクラウドへ反映（ただしクラウド準備完了後のみ）
-  // 最後に受信/送信したクラウドデータと一致する場合はスキップ（無限ループ防止）
+  // ログイン中はローカル変更をクラウドへ反映。
+  // cloudReady 前の変更は cloudStatus が "synced" に切り替わったタイミングで再評価されて push される。
   useEffect(() => {
     if (!firebaseEnabled || !user || !loaded) return;
     if (!cloudReadyRef.current) return;
@@ -190,7 +223,7 @@ export function useTaskStore() {
     lastCloudJsonRef.current = currentJson;
     saveCloudData(user.uid, { recurring, completions, oneOff, theme });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recurring, completions, oneOff, theme, user?.uid, loaded]);
+  }, [recurring, completions, oneOff, theme, user?.uid, loaded, cloudStatus]);
 
   const setTheme = useCallback((t: ThemeId) => setThemeState(t), []);
 
