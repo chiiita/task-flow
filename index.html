@@ -1,13 +1,2028 @@
 <!DOCTYPE html>
-<html lang="ja" class="h-full">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Task Manager</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>" />
-  </head>
-  <body class="min-h-full">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>📋 タスクフロー</title>
+<style>
+  :root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --surface-2: #F4F4F5;
+    --border: #E5E5E5;
+    --border-strong: #D4D4D8;
+    --text: #18181B;
+    --text-2: #52525B;
+    --text-muted: #A1A1AA;
+    --accent: #6366F1;
+    --accent-soft: #EEF2FF;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.10);
+
+    --cat-work: #3B82F6;
+    --cat-skill: #10B981;
+    --cat-personal: #F59E0B;
+    --cat-habit: #EC4899;
+    --cat-other: #8B5CF6;
+
+    --prio-1: #EF4444;
+    --prio-2: #F97316;
+    --prio-3: #EAB308;
+    --prio-4: #3B82F6;
+    --prio-5: #9CA3AF;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  button {
+    font: inherit; cursor: pointer; border: none; background: none; color: inherit;
+    padding: 0;
+  }
+  input, select, textarea {
+    font: inherit; color: inherit;
+  }
+
+  /* --- Layout --- */
+  #app { display: flex; min-height: 100vh; }
+  aside#sidebar {
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  main#main {
+    flex: 1;
+    padding: 0;
+    overflow-y: auto;
+    min-width: 0;
+  }
+  .page-content {
+    padding: 28px 40px;
+    max-width: 980px;
+  }
+
+  /* --- Topbar --- */
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 40px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .topbar-spacer { flex: 1; }
+  .topbar-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: opacity 0.12s, background 0.12s, transform 0.08s;
+    white-space: nowrap;
+  }
+  .topbar-btn:active { transform: scale(0.98); }
+  .topbar-btn svg { width: 14px; height: 14px; }
+  .topbar-btn.primary {
+    background: var(--accent); color: white;
+  }
+  .topbar-btn.primary:hover { opacity: 0.92; }
+  .topbar-btn.secondary {
+    background: var(--surface-2); color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .topbar-btn.secondary:hover { background: white; color: var(--text); }
+  .topbar-btn.icon-only {
+    width: 36px; padding: 0;
+    background: transparent; color: var(--text-muted);
+    border: 1px solid var(--border);
+    justify-content: center;
+  }
+  .topbar-btn.icon-only svg { width: 16px; height: 16px; }
+  .topbar-btn.icon-only:hover { background: var(--surface-2); color: var(--text); }
+
+  /* --- Backup stats grid --- */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat-box {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .stat-num {
+    font-size: 20px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .stat-lbl {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .help-text {
+    font-size: 12px; color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+  .help-text b { color: var(--text-2); }
+  .import-modes {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-top: 8px;
+  }
+  .import-mode-btn {
+    padding: 12px; border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    text-align: left;
+    transition: all 0.12s;
+  }
+  .import-mode-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .import-mode-btn .mode-title {
+    font-size: 13px; font-weight: 600; margin-bottom: 3px;
+  }
+  .import-mode-btn .mode-desc {
+    font-size: 11px; color: var(--text-muted);
+  }
+  .feedback-msg {
+    padding: 10px 12px; border-radius: 8px;
+    font-size: 12px; margin-bottom: 12px;
+  }
+  .feedback-msg.success { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
+  .feedback-msg.error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FCA5A5; }
+  .feedback-msg.info { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+
+  /* --- Category subgroup --- */
+  .cat-subgroup { margin-bottom: 14px; }
+  .cat-subgroup:last-child { margin-bottom: 0; }
+  .cat-subgroup-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 8px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+  }
+  .cat-subgroup-header .cat-dot {
+    width: 8px; height: 8px;
+    border-radius: 3px;
+  }
+  .cat-subgroup-header .cat-name {
+    flex: 1;
+  }
+  .cat-subgroup-header .cat-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .cat-subgroup .task-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    gap: 4px;
+  }
+  .cat-subgroup .task {
+    border: 1px solid transparent;
+    background: transparent;
+  }
+  .cat-subgroup .task:hover {
+    background: var(--surface-2);
+    border-color: var(--border);
+  }
+
+  /* --- Sidebar --- */
+  .sidebar-header {
+    padding: 22px 20px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 4px;
+  }
+  .brand-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    display: grid; place-items: center;
+    color: white; font-size: 16px;
+  }
+  .brand-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand-date { font-size: 11px; color: var(--text-muted); padding-left: 42px; }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 14px 12px;
+    overflow-y: auto;
+  }
+  .nav-section-label {
+    font-size: 10px; font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    padding: 14px 10px 6px;
+    text-transform: uppercase;
+  }
+  .nav-item {
+    width: 100%;
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-2);
+    transition: background 0.12s, color 0.12s;
+    text-align: left;
+  }
+  .nav-item:hover { background: var(--surface-2); color: var(--text); }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav-item .nav-emoji { width: 18px; text-align: center; }
+  .nav-item .nav-label { flex: 1; }
+  .nav-item .nav-count {
+    font-size: 11px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .nav-item.active .nav-count { color: var(--accent); }
+
+  .sidebar-footer {
+    padding: 14px 14px 18px;
+    border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .btn-add {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: transform 0.08s, opacity 0.12s, background 0.12s;
+  }
+  .btn-add:active { transform: scale(0.98); }
+  .btn-add.primary {
+    background: var(--accent); color: white;
+  }
+  .btn-add.primary:hover { opacity: 0.92; }
+  .btn-add.secondary {
+    background: var(--surface-2); color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .btn-add.secondary:hover { background: white; color: var(--text); }
+
+  /* --- Main page --- */
+  .page-header {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 22px;
+  }
+  .page-title {
+    font-size: 24px; font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .page-sub { font-size: 13px; color: var(--text-muted); }
+
+  .progress-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 26px;
+    box-shadow: var(--shadow);
+  }
+  .progress-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .progress-label { font-size: 12px; color: var(--text-2); font-weight: 600; }
+  .progress-value {
+    font-size: 22px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .progress-bar {
+    height: 8px; background: var(--surface-2);
+    border-radius: 999px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #8B5CF6);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+  .progress-meta {
+    display: flex; gap: 18px; margin-top: 12px;
+    font-size: 12px; color: var(--text-muted);
+  }
+  .progress-meta span b { color: var(--text); font-weight: 600; }
+
+  .section {
+    margin-bottom: 30px;
+  }
+  .section-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--text-2);
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .section-count {
+    font-size: 11px; color: var(--text-muted);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .section-empty {
+    padding: 28px 16px;
+    color: var(--text-muted);
+    text-align: center;
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+  }
+
+  /* --- Task item --- */
+  .task-list {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .task {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: background 0.12s, border-color 0.12s, opacity 0.2s;
+  }
+  .task:hover { border-color: var(--border-strong); }
+  .task.dragging { opacity: 0.4; }
+  .task.drop-target { border-color: var(--accent); background: var(--accent-soft); }
+  .task.done-today {
+    background: var(--surface-2);
+    opacity: 0.55;
+  }
+  .task.completed {
+    background: var(--surface-2);
+    opacity: 0.5;
+  }
+  .task.completed .task-title { text-decoration: line-through; }
+
+  .task-handle {
+    color: var(--text-muted); font-size: 14px;
+    cursor: grab; padding: 2px;
+    user-select: none;
+  }
+  .task-handle:active { cursor: grabbing; }
+
+  .task-check {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border-strong);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .task-check:hover { border-color: var(--accent); }
+  .task-check.checked {
+    background: var(--accent); border-color: var(--accent);
+    color: white;
+  }
+  .task-check svg { width: 12px; height: 12px; display: none; }
+  .task-check.checked svg { display: block; }
+
+  .task-body {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 3px;
+    cursor: pointer;
+  }
+  .task-title {
+    font-size: 14px;
+    font-weight: 500;
+    word-break: break-word;
+  }
+  .task-meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+  .task-meta .meta-dot { color: var(--text-muted); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .badge-cat {
+    color: white;
+  }
+  .badge-prio {
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+  .badge-prio[data-prio="1"] { background: #FEE2E2; color: var(--prio-1); border-color: #FCA5A5; }
+  .badge-prio[data-prio="2"] { background: #FFEDD5; color: var(--prio-2); border-color: #FDBA74; }
+  .badge-prio[data-prio="3"] { background: #FEF3C7; color: var(--prio-3); border-color: #FDE68A; }
+  .badge-prio[data-prio="4"] { background: #DBEAFE; color: var(--prio-4); border-color: #93C5FD; }
+  .badge-prio[data-prio="5"] { background: var(--surface-2); color: var(--prio-5); }
+
+  .badge-today {
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid #C7D2FE;
+    cursor: pointer;
+  }
+  .badge-deadline {
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+
+  .task-actions {
+    display: flex; gap: 4px; align-items: center;
+    flex-shrink: 0;
+  }
+  .icon-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    color: var(--text-muted);
+    transition: background 0.12s, color 0.12s;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+  .icon-btn.danger:hover { color: #DC2626; }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* --- Modal --- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: grid; place-items: center;
+    z-index: 100;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: 16px;
+    width: 480px; max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    padding: 24px;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .modal-title {
+    font-size: 17px; font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .modal-close {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    display: grid; place-items: center;
+  }
+  .modal-close:hover { background: var(--surface-2); color: var(--text); }
+
+  .field {
+    margin-bottom: 16px;
+  }
+  .field-label {
+    font-size: 12px; font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 6px;
+    display: block;
+  }
+  .field input[type="text"],
+  .field input[type="number"],
+  .field input[type="date"],
+  .field textarea,
+  .field select {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .field input:focus,
+  .field textarea:focus,
+  .field select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
+  .field textarea { min-height: 60px; resize: vertical; }
+
+  .chip-group {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-2);
+    transition: all 0.12s;
+  }
+  .chip:hover { border-color: var(--text-2); }
+  .chip.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .chip-cat.active[data-cat="work"] { background: var(--cat-work); border-color: var(--cat-work); }
+  .chip-cat.active[data-cat="skill"] { background: var(--cat-skill); border-color: var(--cat-skill); }
+  .chip-cat.active[data-cat="personal"] { background: var(--cat-personal); border-color: var(--cat-personal); }
+  .chip-cat.active[data-cat="habit"] { background: var(--cat-habit); border-color: var(--cat-habit); }
+  .chip-cat.active[data-cat="other"] { background: var(--cat-other); border-color: var(--cat-other); }
+
+  .checkbox-field {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .checkbox-field input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+  }
+
+  .modal-actions {
+    display: flex; gap: 10px; justify-content: space-between;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .modal-actions-left { display: flex; gap: 8px; }
+  .modal-actions-right { display: flex; gap: 8px; margin-left: auto; }
+  .btn {
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: opacity 0.12s, background 0.12s, transform 0.08s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { opacity: 0.92; }
+  .btn-primary:disabled { background: var(--text-muted); cursor: not-allowed; opacity: 1; }
+  .btn-secondary { background: var(--surface-2); color: var(--text-2); }
+  .btn-secondary:hover { background: var(--border); color: var(--text); }
+  .btn-danger { color: #DC2626; background: transparent; }
+  .btn-danger:hover { background: #FEF2F2; }
+  .btn-archive { color: #059669; background: transparent; }
+  .btn-archive:hover { background: #ECFDF5; }
+
+  /* --- Misc --- */
+  .deadline-warn { color: #DC2626; font-weight: 600; }
+  .deadline-soon { color: #D97706; font-weight: 600; }
+
+  .freq-label {
+    font-size: 10px; color: var(--text-muted); font-weight: 500;
+  }
+
+  .empty-page {
+    text-align: center; padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-page h2 { font-size: 16px; margin: 0 0 6px; color: var(--text-2); }
+
+  /* Sidebar category color marker */
+  .cat-marker {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .cat-marker[data-cat="work"] { background: var(--cat-work); }
+  .cat-marker[data-cat="skill"] { background: var(--cat-skill); }
+  .cat-marker[data-cat="personal"] { background: var(--cat-personal); }
+  .cat-marker[data-cat="habit"] { background: var(--cat-habit); }
+  .cat-marker[data-cat="other"] { background: var(--cat-other); }
+
+  .badge-cat[data-cat="work"] { background: var(--cat-work); }
+  .badge-cat[data-cat="skill"] { background: var(--cat-skill); }
+  .badge-cat[data-cat="personal"] { background: var(--cat-personal); }
+  .badge-cat[data-cat="habit"] { background: var(--cat-habit); }
+  .badge-cat[data-cat="other"] { background: var(--cat-other); }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar"></aside>
+  <main id="main"></main>
+</div>
+<div id="modal-root"></div>
+
+<script>
+(function(){
+'use strict';
+
+// ============================================
+// 定数
+// ============================================
+const CATEGORIES = [
+  { id: 'work',     label: '仕事',         emoji: '💼' },
+  { id: 'skill',    label: 'スキル',       emoji: '📚' },
+  { id: 'personal', label: 'プライベート', emoji: '👤' },
+  { id: 'habit',    label: '習慣',         emoji: '💖' },
+  { id: 'other',    label: 'その他',       emoji: '🏷' },
+];
+const CAT_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.id, c.label]));
+
+const PRIORITY_LABELS = { 1: '最優先', 2: '高', 3: '中', 4: '低', 5: 'いつでも' };
+
+const FREQUENCIES = [
+  { id: 'daily',    label: '毎日' },
+  { id: 'weekday',  label: '平日' },
+  { id: 'weekly',   label: '毎週' },
+  { id: 'biweekly', label: '隔週' },
+  { id: 'monthly',  label: '毎月' },
+];
+
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+const STORAGE_KEY = 'taskflow_v2_state';
+
+// ============================================
+// ユーティリティ
+// ============================================
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function formatJpDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${y}/${m}/${d}`;
+}
+
+function daysUntil(iso) {
+  if (!iso) return null;
+  const today = new Date(todayStr());
+  const target = new Date(iso);
+  return Math.round((target - today) / 86400000);
+}
+
+function isRecurringScheduledOn(task, dateStr) {
+  const d = new Date(dateStr);
+  const dow = d.getDay();
+  const dom = d.getDate();
+  switch (task.frequency) {
+    case 'daily':    return true;
+    case 'weekday':  return dow >= 1 && dow <= 5;
+    case 'weekly':   return (task.days || []).includes(dow);
+    case 'biweekly': {
+      if (!(task.days || []).includes(dow)) return false;
+      const weekIdx = Math.floor((d - new Date(task.createdAt)) / (7 * 86400000));
+      return weekIdx >= 0 && weekIdx % 2 === 0;
+    }
+    case 'monthly':  return dom === (task.monthDay || 1);
+    default:         return false;
+  }
+}
+
+// ============================================
+// State
+// ============================================
+let state = {
+  oneOff: [],
+  recurring: [],
+  recurringCompletions: [],
+  longTerm: [],
+  page: 'dashboard',
+};
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    state.oneOff = parsed.oneOff || [];
+    state.recurring = parsed.recurring || [];
+    state.recurringCompletions = parsed.recurringCompletions || [];
+    state.longTerm = parsed.longTerm || [];
+  } catch (e) {
+    console.error('load error', e);
+  }
+}
+
+function save() {
+  const data = {
+    oneOff: state.oneOff,
+    recurring: state.recurring,
+    recurringCompletions: state.recurringCompletions,
+    longTerm: state.longTerm,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// ============================================
+// クエリ
+// ============================================
+function isRecurringDoneToday(taskId) {
+  const today = todayStr();
+  return state.recurringCompletions.some(c => c.taskId === taskId && c.date === today);
+}
+
+function isLongTermDoneToday(task) {
+  return (task.completedDates || []).includes(todayStr());
+}
+
+function sortBySortOrder(arr) {
+  return [...arr].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
+function recurringForToday() {
+  return sortBySortOrder(state.recurring.filter(t => isRecurringScheduledOn(t, todayStr())));
+}
+
+function oneOffActive() {
+  return sortBySortOrder(state.oneOff.filter(t => !t.completedAt));
+}
+
+function longTermActive() {
+  return sortBySortOrder(state.longTerm.filter(t => !t.archivedAt));
+}
+
+function categoryProgress(cat) {
+  const oneOff = state.oneOff.filter(t => t.category === cat && !t.completedAt);
+  const recurring = state.recurring.filter(t => t.category === cat && isRecurringScheduledOn(t, todayStr()));
+  const longTerm = state.longTerm.filter(t => t.category === cat && !t.archivedAt);
+
+  const total = oneOff.length + recurring.length + longTerm.length;
+  const doneOneOff = 0;
+  const doneRec = recurring.filter(t => isRecurringDoneToday(t.id)).length;
+  const doneLong = longTerm.filter(t => isLongTermDoneToday(t)).length;
+  const done = doneOneOff + doneRec + doneLong;
+
+  return { done, total };
+}
+
+function todayProgress() {
+  const recToday = state.recurring.filter(t => isRecurringScheduledOn(t, todayStr()));
+  const oneOffToday = state.oneOff.filter(t => t.isToday && !t.completedAt);
+  const oneOffDoneToday = state.oneOff.filter(t => t.isToday && t.completedAt === todayStr());
+  const longActive = state.longTerm.filter(t => !t.archivedAt);
+
+  const total = recToday.length + oneOffToday.length + oneOffDoneToday.length + longActive.length;
+  const done =
+    recToday.filter(t => isRecurringDoneToday(t.id)).length +
+    oneOffDoneToday.length +
+    longActive.filter(t => isLongTermDoneToday(t)).length;
+
+  return {
+    done, total,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+    countOneOff: oneOffToday.length + oneOffDoneToday.length,
+    countRecurring: recToday.length,
+    countLongTerm: longActive.length,
+  };
+}
+
+// ============================================
+// アクション
+// ============================================
+function addOneOff(data) {
+  const maxOrder = state.oneOff.reduce((m, t) => Math.max(m, t.sortOrder || 0), 0);
+  state.oneOff.push({
+    id: genId(),
+    title: data.title,
+    category: data.category,
+    priority: data.priority,
+    isToday: data.isToday,
+    sortOrder: maxOrder + 1,
+    completedAt: null,
+    createdAt: new Date().toISOString(),
+  });
+  save(); render();
+}
+
+function addRecurring(data) {
+  const maxOrder = state.recurring.reduce((m, t) => Math.max(m, t.sortOrder || 0), 0);
+  state.recurring.push({
+    id: genId(),
+    title: data.title,
+    category: data.category,
+    frequency: data.frequency,
+    days: data.days,
+    monthDay: data.monthDay,
+    sortOrder: maxOrder + 1,
+    createdAt: new Date().toISOString(),
+  });
+  save(); render();
+}
+
+function addLongTerm(data) {
+  const maxOrder = state.longTerm.reduce((m, t) => Math.max(m, t.sortOrder || 0), 0);
+  state.longTerm.push({
+    id: genId(),
+    title: data.title,
+    category: data.category,
+    priority: data.priority,
+    deadline: data.deadline || null,
+    sortOrder: maxOrder + 1,
+    completedDates: [],
+    archivedAt: null,
+    createdAt: new Date().toISOString(),
+  });
+  save(); render();
+}
+
+function updateTask(type, id, patch) {
+  const arr = type === 'oneoff' ? state.oneOff
+            : type === 'recurring' ? state.recurring
+            : state.longTerm;
+  const idx = arr.findIndex(t => t.id === id);
+  if (idx >= 0) {
+    arr[idx] = { ...arr[idx], ...patch };
+    save(); render();
+  }
+}
+
+function deleteTask(type, id) {
+  if (type === 'oneoff') {
+    state.oneOff = state.oneOff.filter(t => t.id !== id);
+  } else if (type === 'recurring') {
+    state.recurring = state.recurring.filter(t => t.id !== id);
+    state.recurringCompletions = state.recurringCompletions.filter(c => c.taskId !== id);
+  } else {
+    state.longTerm = state.longTerm.filter(t => t.id !== id);
+  }
+  save(); render();
+}
+
+function toggleOneOffComplete(id) {
+  const t = state.oneOff.find(x => x.id === id);
+  if (!t) return;
+  t.completedAt = t.completedAt ? null : todayStr();
+  save(); render();
+}
+
+function toggleOneOffIsToday(id) {
+  const t = state.oneOff.find(x => x.id === id);
+  if (!t) return;
+  t.isToday = !t.isToday;
+  save(); render();
+}
+
+function cycleOneOffPriority(id) {
+  const t = state.oneOff.find(x => x.id === id);
+  if (!t) return;
+  t.priority = (t.priority % 5) + 1;
+  save(); render();
+}
+
+function toggleRecurringComplete(id) {
+  const today = todayStr();
+  const existing = state.recurringCompletions.findIndex(c => c.taskId === id && c.date === today);
+  if (existing >= 0) {
+    state.recurringCompletions.splice(existing, 1);
+  } else {
+    state.recurringCompletions.push({ taskId: id, date: today });
+  }
+  save(); render();
+}
+
+function toggleLongTermToday(id) {
+  const t = state.longTerm.find(x => x.id === id);
+  if (!t) return;
+  const today = todayStr();
+  t.completedDates = t.completedDates || [];
+  const idx = t.completedDates.indexOf(today);
+  if (idx >= 0) {
+    t.completedDates.splice(idx, 1);
+  } else {
+    t.completedDates.push(today);
+  }
+  save(); render();
+}
+
+function archiveLongTerm(id) {
+  const t = state.longTerm.find(x => x.id === id);
+  if (!t) return;
+  t.archivedAt = new Date().toISOString();
+  save(); render();
+}
+
+function cycleLongTermPriority(id) {
+  const t = state.longTerm.find(x => x.id === id);
+  if (!t) return;
+  t.priority = (t.priority % 5) + 1;
+  save(); render();
+}
+
+function reorderTasks(type, draggedId, targetId, position) {
+  const arr = type === 'oneoff' ? state.oneOff
+            : type === 'recurring' ? state.recurring
+            : state.longTerm;
+  const dragged = arr.find(t => t.id === draggedId);
+  const target = arr.find(t => t.id === targetId);
+  if (!dragged || !target) return;
+
+  // Get all of this type ordered
+  const sorted = sortBySortOrder(arr);
+  const filtered = sorted.filter(t => t.id !== draggedId);
+  const targetIdx = filtered.findIndex(t => t.id === targetId);
+  const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
+  filtered.splice(insertIdx, 0, dragged);
+  filtered.forEach((t, i) => { t.sortOrder = i + 1; });
+  save(); render();
+}
+
+function navigate(page) {
+  state.page = page;
+  render();
+}
+
+// ============================================
+// レンダリング
+// ============================================
+const $ = (sel) => document.querySelector(sel);
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function iconSvg(name) {
+  switch (name) {
+    case 'check': return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8.5 6.5 12 13 4.5"/></svg>';
+    case 'edit':  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    case 'trash': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+    case 'x':     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    case 'plus':  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    case 'drag':  return '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1"/><circle cx="11" cy="3" r="1"/><circle cx="5" cy="8" r="1"/><circle cx="11" cy="8" r="1"/><circle cx="5" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>';
+    case 'backup': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    case 'upload': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+    case 'download': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  }
+  return '';
+}
+
+function renderSidebar() {
+  const todayJp = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+
+  let nav = `
+    <button class="nav-item ${state.page === 'dashboard' ? 'active' : ''}" data-action="navigate" data-page="dashboard">
+      <span class="nav-emoji">▸</span>
+      <span class="nav-label">ダッシュボード</span>
+    </button>
+    <div class="nav-section-label">カテゴリ</div>
+  `;
+  for (const c of CATEGORIES) {
+    const p = categoryProgress(c.id);
+    nav += `
+      <button class="nav-item ${state.page === c.id ? 'active' : ''}" data-action="navigate" data-page="${c.id}">
+        <span class="nav-emoji">${c.emoji}</span>
+        <span class="nav-label">${c.label}</span>
+        <span class="nav-count">${p.done}/${p.total}</span>
+      </button>
+    `;
+  }
+
+  $('#sidebar').innerHTML = `
+    <div class="sidebar-header">
+      <div class="brand">
+        <div class="brand-icon">📋</div>
+        <div class="brand-title">タスクフロー</div>
+      </div>
+      <div class="brand-date">${todayJp}</div>
+    </div>
+    <div class="sidebar-nav">${nav}</div>
+  `;
+}
+
+function renderTopbar() {
+  return `
+    <div class="topbar">
+      <button class="topbar-btn primary" data-action="add-oneoff">${iconSvg('plus')} 単発タスク</button>
+      <button class="topbar-btn secondary" data-action="add-recurring">${iconSvg('plus')} 定期タスク</button>
+      <button class="topbar-btn secondary" data-action="add-longterm">${iconSvg('plus')} 長期タスク</button>
+      <div class="topbar-spacer"></div>
+      <button class="topbar-btn icon-only" data-action="open-backup" title="バックアップ・復元">${iconSvg('backup')}</button>
+    </div>
+  `;
+}
+
+function renderTaskListByCategory(tasks, renderer) {
+  if (tasks.length === 0) return '';
+  const byCat = {};
+  for (const t of tasks) {
+    if (!byCat[t.category]) byCat[t.category] = [];
+    byCat[t.category].push(t);
+  }
+  return CATEGORIES.map(c => {
+    const list = byCat[c.id];
+    if (!list || list.length === 0) return '';
+    return `
+      <div class="cat-subgroup">
+        <div class="cat-subgroup-header">
+          <span class="cat-dot" style="background: var(--cat-${c.id});"></span>
+          <span>${c.emoji}</span>
+          <span class="cat-name">${c.label}</span>
+          <span class="cat-count">${list.length}</span>
+        </div>
+        <div class="task-list">${list.map(renderer).join('')}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderOneOffTask(t) {
+  const done = !!t.completedAt;
+  const catLabel = CAT_LABEL[t.category];
+  return `
+    <div class="task ${done ? 'completed' : ''}" data-task-type="oneoff" data-task-id="${t.id}" draggable="true">
+      <span class="task-handle" title="ドラッグで並び替え">${iconSvg('drag')}</span>
+      <button class="task-check ${done ? 'checked' : ''}" data-action="toggle-oneoff" data-id="${t.id}">${iconSvg('check')}</button>
+      <div class="task-body" data-action="edit-oneoff" data-id="${t.id}">
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta">
+          <span class="badge badge-cat" data-cat="${t.category}">${escapeHtml(catLabel)}</span>
+          <span class="badge badge-prio" data-prio="${t.priority}" data-action="cycle-prio-oneoff" data-id="${t.id}" title="クリックで優先度変更">優${t.priority}</span>
+          ${t.isToday && !done ? `<span class="badge badge-today" data-action="toggle-istoday-oneoff" data-id="${t.id}" title="クリックであとで">今日</span>` : !done ? `<span class="badge badge-today" data-action="toggle-istoday-oneoff" data-id="${t.id}" style="background:var(--surface-2);color:var(--text-muted);border-color:var(--border);" title="クリックで今日">あとで</span>` : ''}
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="icon-btn" data-action="edit-oneoff" data-id="${t.id}" title="編集">${iconSvg('edit')}</button>
+        <button class="icon-btn danger" data-action="delete-oneoff" data-id="${t.id}" title="削除">${iconSvg('trash')}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRecurringTask(t) {
+  const done = isRecurringDoneToday(t.id);
+  const catLabel = CAT_LABEL[t.category];
+  let freqDesc = '';
+  if (t.frequency === 'daily') freqDesc = '毎日';
+  else if (t.frequency === 'weekday') freqDesc = '平日';
+  else if (t.frequency === 'weekly') freqDesc = '毎週 ' + (t.days || []).map(d => WEEKDAYS[d]).join('・');
+  else if (t.frequency === 'biweekly') freqDesc = '隔週 ' + (t.days || []).map(d => WEEKDAYS[d]).join('・');
+  else if (t.frequency === 'monthly') freqDesc = '毎月' + (t.monthDay || 1) + '日';
+
+  return `
+    <div class="task ${done ? 'completed' : ''}" data-task-type="recurring" data-task-id="${t.id}" draggable="true">
+      <span class="task-handle" title="ドラッグで並び替え">${iconSvg('drag')}</span>
+      <button class="task-check ${done ? 'checked' : ''}" data-action="toggle-recurring" data-id="${t.id}">${iconSvg('check')}</button>
+      <div class="task-body" data-action="edit-recurring" data-id="${t.id}">
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta">
+          <span class="badge badge-cat" data-cat="${t.category}">${escapeHtml(catLabel)}</span>
+          <span class="freq-label">${escapeHtml(freqDesc)}</span>
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="icon-btn" data-action="edit-recurring" data-id="${t.id}" title="編集">${iconSvg('edit')}</button>
+        <button class="icon-btn danger" data-action="delete-recurring" data-id="${t.id}" title="削除">${iconSvg('trash')}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderLongTermTask(t) {
+  const doneToday = isLongTermDoneToday(t);
+  const catLabel = CAT_LABEL[t.category];
+  let deadlineHtml = '';
+  if (t.deadline) {
+    const d = daysUntil(t.deadline);
+    let cls = '';
+    let suffix = '';
+    if (d < 0) { cls = 'deadline-warn'; suffix = ` (${-d}日超過)`; }
+    else if (d === 0) { cls = 'deadline-warn'; suffix = ' (今日まで)'; }
+    else if (d <= 7) { cls = 'deadline-soon'; suffix = ` (あと${d}日)`; }
+    else { suffix = ` (あと${d}日)`; }
+    deadlineHtml = `<span class="badge badge-deadline ${cls}">目標 ${formatJpDate(t.deadline)}${suffix}</span>`;
+  }
+
+  return `
+    <div class="task ${doneToday ? 'done-today' : ''}" data-task-type="longterm" data-task-id="${t.id}" draggable="true">
+      <span class="task-handle" title="ドラッグで並び替え">${iconSvg('drag')}</span>
+      <button class="task-check ${doneToday ? 'checked' : ''}" data-action="toggle-longterm-today" data-id="${t.id}" title="今日分やった">${iconSvg('check')}</button>
+      <div class="task-body" data-action="edit-longterm" data-id="${t.id}">
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta">
+          <span class="badge badge-cat" data-cat="${t.category}">${escapeHtml(catLabel)}</span>
+          <span class="badge badge-prio" data-prio="${t.priority}" data-action="cycle-prio-longterm" data-id="${t.id}" title="クリックで優先度変更">優${t.priority}</span>
+          ${deadlineHtml}
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="icon-btn" data-action="edit-longterm" data-id="${t.id}" title="編集">${iconSvg('edit')}</button>
+        <button class="icon-btn danger" data-action="delete-longterm" data-id="${t.id}" title="削除">${iconSvg('trash')}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTaskListSection(title, tasks, renderer, emptyMsg, byCategory) {
+  return `
+    <div class="section">
+      <div class="section-title">
+        ${title}
+        <span class="section-count">${tasks.length}</span>
+      </div>
+      ${tasks.length === 0
+        ? `<div class="section-empty">${emptyMsg}</div>`
+        : byCategory
+          ? renderTaskListByCategory(tasks, renderer)
+          : `<div class="task-list">${tasks.map(renderer).join('')}</div>`}
+    </div>
+  `;
+}
+
+function renderDashboard() {
+  const prog = todayProgress();
+  const oneOffs = oneOffActive().filter(t => t.isToday);
+  const oneOffsDone = state.oneOff.filter(t => t.isToday && t.completedAt === todayStr());
+  const oneOffsAll = [...oneOffs, ...oneOffsDone].sort((a,b) => (a.sortOrder||0)-(b.sortOrder||0));
+  const recurrings = recurringForToday();
+  const longTerms = longTermActive();
+
+  $('#main').innerHTML = `
+    ${renderTopbar()}
+    <div class="page-content">
+      <div class="page-header">
+        <h1 class="page-title">ダッシュボード</h1>
+        <div class="page-sub">今日のタスク</div>
+      </div>
+
+      <div class="progress-card">
+        <div class="progress-row">
+          <span class="progress-label">完了率</span>
+          <span class="progress-value">${prog.percent}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${prog.percent}%"></div></div>
+        <div class="progress-meta">
+          <span>完了 <b>${prog.done}</b> / 全 <b>${prog.total}</b></span>
+          <span>単発 <b>${prog.countOneOff}</b></span>
+          <span>定期 <b>${prog.countRecurring}</b></span>
+          <span>長期 <b>${prog.countLongTerm}</b></span>
+        </div>
+      </div>
+
+      ${renderTaskListSection('単発タスク', oneOffsAll, renderOneOffTask, '今日の単発タスクはありません', true)}
+      ${renderTaskListSection('定期タスク', recurrings, renderRecurringTask, '今日の定期タスクはありません', true)}
+      ${renderTaskListSection('長期タスク', longTerms, renderLongTermTask, '長期タスクはありません', true)}
+    </div>
+  `;
+}
+
+function renderCategoryPage(cat) {
+  const catInfo = CATEGORIES.find(c => c.id === cat);
+  const recurringsToday = recurringForToday().filter(t => t.category === cat);
+  const recurringsOther = sortBySortOrder(state.recurring.filter(t => t.category === cat && !isRecurringScheduledOn(t, todayStr())));
+  const oneOffs = sortBySortOrder(state.oneOff.filter(t => t.category === cat && !t.completedAt));
+  const longTerms = sortBySortOrder(state.longTerm.filter(t => t.category === cat && !t.archivedAt));
+
+  $('#main').innerHTML = `
+    ${renderTopbar()}
+    <div class="page-content">
+      <div class="page-header">
+        <h1 class="page-title">${catInfo.emoji} ${catInfo.label}</h1>
+        <div class="page-sub">${oneOffs.length + recurringsToday.length + longTerms.length} 件のアクティブ</div>
+      </div>
+
+      ${renderTaskListSection('今日の定期タスク', recurringsToday, renderRecurringTask, '今日の定期タスクはありません')}
+      ${recurringsOther.length > 0
+        ? renderTaskListSection('その他の定期タスク', recurringsOther, renderRecurringTask, '')
+        : ''}
+      ${renderTaskListSection('単発タスク', oneOffs, renderOneOffTask, '単発タスクはありません')}
+      ${renderTaskListSection('長期タスク', longTerms, renderLongTermTask, '長期タスクはありません')}
+    </div>
+  `;
+}
+
+function render() {
+  renderSidebar();
+  if (state.page === 'dashboard') {
+    renderDashboard();
+  } else {
+    renderCategoryPage(state.page);
+  }
+}
+
+// ============================================
+// モーダル
+// ============================================
+function closeModal() {
+  $('#modal-root').innerHTML = '';
+}
+
+function renderChipGroup(items, currentValue, clsExtra, dataAttr) {
+  return items.map(it => `
+    <button class="chip ${clsExtra || ''}" ${dataAttr ? `data-${dataAttr}="${it.id || it.value}"` : ''} data-value="${it.id || it.value}" ${it.id === currentValue || it.value === currentValue ? 'data-active="1"' : ''}>
+      ${escapeHtml(it.label)}
+    </button>
+  `).join('');
+}
+
+function makeChips(container, items, currentValue, opts) {
+  opts = opts || {};
+  const cls = opts.extraClass || '';
+  const dataAttr = opts.dataAttr;
+  container.innerHTML = items.map(it => {
+    const val = it.id !== undefined ? it.id : it.value;
+    const isActive = String(val) === String(currentValue);
+    return `<button type="button" class="chip ${cls} ${isActive ? 'active' : ''}" ${dataAttr ? `data-${dataAttr}="${val}"` : ''} data-val="${val}">${escapeHtml(it.label)}</button>`;
+  }).join('');
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    container.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    if (opts.onChange) opts.onChange(btn.dataset.val);
+  });
+}
+
+function openAddOneOffModal(prefillCategory) {
+  let title = '';
+  let category = prefillCategory || 'work';
+  let priority = 3;
+  let isToday = true;
+
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">単発タスクを追加</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+        <div class="field">
+          <label class="field-label">タスク名</label>
+          <input type="text" id="m-title" placeholder="例: 〇〇に連絡" autofocus>
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <div class="chip-group" id="m-category"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">優先度</label>
+          <div class="chip-group" id="m-priority"></div>
+        </div>
+        <label class="checkbox-field">
+          <input type="checkbox" id="m-istoday" ${isToday ? 'checked' : ''}>
+          今日やる
+        </label>
+        <div class="modal-actions">
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">キャンセル</button>
+            <button class="btn btn-primary" id="m-submit" disabled>追加する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
+  $('#m-category').querySelectorAll('.chip').forEach(c => {
+    const v = c.dataset.val;
+    c.setAttribute('data-cat', v);
+  });
+
+  makeChips($('#m-priority'), prioItems, priority, { onChange: v => priority = Number(v) });
+
+  const titleInput = $('#m-title');
+  const submitBtn = $('#m-submit');
+  titleInput.addEventListener('input', () => {
+    title = titleInput.value.trim();
+    submitBtn.disabled = !title;
+  });
+  titleInput.focus();
+
+  submitBtn.addEventListener('click', () => {
+    if (!title) return;
+    addOneOff({ title, category, priority, isToday: $('#m-istoday').checked });
+    closeModal();
+  });
+}
+
+function openAddRecurringModal(prefillCategory) {
+  let title = '';
+  let category = prefillCategory || 'work';
+  let frequency = 'daily';
+  let days = [1,2,3,4,5];
+  let monthDay = 1;
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">定期タスクを追加</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+        <div class="field">
+          <label class="field-label">タスク名</label>
+          <input type="text" id="m-title" placeholder="例: ストレッチ" autofocus>
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <div class="chip-group" id="m-category"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">頻度</label>
+          <div class="chip-group" id="m-frequency"></div>
+        </div>
+        <div class="field" id="m-days-field" style="display:none;">
+          <label class="field-label">曜日</label>
+          <div class="chip-group" id="m-days"></div>
+        </div>
+        <div class="field" id="m-monthday-field" style="display:none;">
+          <label class="field-label">毎月の日付</label>
+          <input type="number" id="m-monthday" min="1" max="31" value="1">
+        </div>
+        <div class="modal-actions">
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">キャンセル</button>
+            <button class="btn btn-primary" id="m-submit" disabled>追加する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
+  $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
+
+  const updateConditional = () => {
+    $('#m-days-field').style.display = (frequency === 'weekly' || frequency === 'biweekly') ? 'block' : 'none';
+    $('#m-monthday-field').style.display = frequency === 'monthly' ? 'block' : 'none';
+  };
+
+  makeChips($('#m-frequency'), FREQUENCIES, frequency, { onChange: v => { frequency = v; updateConditional(); } });
+  updateConditional();
+
+  const daysContainer = $('#m-days');
+  const renderDays = () => {
+    daysContainer.innerHTML = WEEKDAYS.map((label, idx) => `
+      <button type="button" class="chip ${days.includes(idx) ? 'active' : ''}" data-day="${idx}">${label}</button>
+    `).join('');
+  };
+  renderDays();
+  daysContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    const d = Number(btn.dataset.day);
+    if (days.includes(d)) days = days.filter(x => x !== d);
+    else days.push(d);
+    renderDays();
+  });
+
+  const titleInput = $('#m-title');
+  const submitBtn = $('#m-submit');
+  titleInput.addEventListener('input', () => {
+    title = titleInput.value.trim();
+    submitBtn.disabled = !title;
+  });
+  titleInput.focus();
+
+  submitBtn.addEventListener('click', () => {
+    if (!title) return;
+    monthDay = Number($('#m-monthday').value) || 1;
+    addRecurring({ title, category, frequency, days: [...days].sort((a,b)=>a-b), monthDay });
+    closeModal();
+  });
+}
+
+function openAddLongTermModal(prefillCategory) {
+  let title = '';
+  let category = prefillCategory || 'work';
+  let priority = 3;
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">長期タスクを追加</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+        <div class="field">
+          <label class="field-label">タスク名</label>
+          <input type="text" id="m-title" placeholder="例: 簿記2級の勉強" autofocus>
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <div class="chip-group" id="m-category"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">優先度</label>
+          <div class="chip-group" id="m-priority"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">目標日（任意）</label>
+          <input type="date" id="m-deadline">
+        </div>
+        <div class="modal-actions">
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">キャンセル</button>
+            <button class="btn btn-primary" id="m-submit" disabled>追加する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
+  makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
+  $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
+  makeChips($('#m-priority'), prioItems, priority, { onChange: v => priority = Number(v) });
+
+  const titleInput = $('#m-title');
+  const submitBtn = $('#m-submit');
+  titleInput.addEventListener('input', () => {
+    title = titleInput.value.trim();
+    submitBtn.disabled = !title;
+  });
+  titleInput.focus();
+
+  submitBtn.addEventListener('click', () => {
+    if (!title) return;
+    const deadline = $('#m-deadline').value || null;
+    addLongTerm({ title, category, priority, deadline });
+    closeModal();
+  });
+}
+
+function openEditOneOffModal(taskId) {
+  const t = state.oneOff.find(x => x.id === taskId);
+  if (!t) return;
+  let title = t.title;
+  let category = t.category;
+  let priority = t.priority;
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">単発タスクを編集</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+        <div class="field">
+          <label class="field-label">タスク名</label>
+          <input type="text" id="m-title" value="${escapeHtml(t.title)}">
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <div class="chip-group" id="m-category"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">優先度</label>
+          <div class="chip-group" id="m-priority"></div>
+        </div>
+        <label class="checkbox-field">
+          <input type="checkbox" id="m-istoday" ${t.isToday ? 'checked' : ''}>
+          今日やる
+        </label>
+        <div class="modal-actions">
+          <div class="modal-actions-left">
+            <button class="btn btn-danger" id="m-delete">削除</button>
+          </div>
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">キャンセル</button>
+            <button class="btn btn-primary" id="m-save">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
+  makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
+  $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
+  makeChips($('#m-priority'), prioItems, priority, { onChange: v => priority = Number(v) });
+
+  $('#m-title').addEventListener('input', e => title = e.target.value.trim());
+
+  $('#m-save').addEventListener('click', () => {
+    if (!title) return;
+    updateTask('oneoff', taskId, { title, category, priority, isToday: $('#m-istoday').checked });
+    closeModal();
+  });
+  $('#m-delete').addEventListener('click', () => {
+    if (confirm('このタスクを削除しますか？')) {
+      deleteTask('oneoff', taskId);
+      closeModal();
+    }
+  });
+}
+
+function openEditRecurringModal(taskId) {
+  const t = state.recurring.find(x => x.id === taskId);
+  if (!t) return;
+  let title = t.title;
+  let category = t.category;
+  let frequency = t.frequency;
+  let days = [...(t.days || [])];
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">定期タスクを編集</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+        <div class="field">
+          <label class="field-label">タスク名</label>
+          <input type="text" id="m-title" value="${escapeHtml(t.title)}">
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <div class="chip-group" id="m-category"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">頻度</label>
+          <div class="chip-group" id="m-frequency"></div>
+        </div>
+        <div class="field" id="m-days-field" style="display:none;">
+          <label class="field-label">曜日</label>
+          <div class="chip-group" id="m-days"></div>
+        </div>
+        <div class="field" id="m-monthday-field" style="display:none;">
+          <label class="field-label">毎月の日付</label>
+          <input type="number" id="m-monthday" min="1" max="31" value="${t.monthDay || 1}">
+        </div>
+        <div class="modal-actions">
+          <div class="modal-actions-left">
+            <button class="btn btn-danger" id="m-delete">削除</button>
+          </div>
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">キャンセル</button>
+            <button class="btn btn-primary" id="m-save">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
+  $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
+
+  const updateConditional = () => {
+    $('#m-days-field').style.display = (frequency === 'weekly' || frequency === 'biweekly') ? 'block' : 'none';
+    $('#m-monthday-field').style.display = frequency === 'monthly' ? 'block' : 'none';
+  };
+  makeChips($('#m-frequency'), FREQUENCIES, frequency, { onChange: v => { frequency = v; updateConditional(); } });
+  updateConditional();
+
+  const daysContainer = $('#m-days');
+  const renderDays = () => {
+    daysContainer.innerHTML = WEEKDAYS.map((label, idx) => `
+      <button type="button" class="chip ${days.includes(idx) ? 'active' : ''}" data-day="${idx}">${label}</button>
+    `).join('');
+  };
+  renderDays();
+  daysContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    const d = Number(btn.dataset.day);
+    if (days.includes(d)) days = days.filter(x => x !== d);
+    else days.push(d);
+    renderDays();
+  });
+
+  $('#m-title').addEventListener('input', e => title = e.target.value.trim());
+
+  $('#m-save').addEventListener('click', () => {
+    if (!title) return;
+    const monthDay = Number($('#m-monthday').value) || 1;
+    updateTask('recurring', taskId, { title, category, frequency, days: [...days].sort((a,b)=>a-b), monthDay });
+    closeModal();
+  });
+  $('#m-delete').addEventListener('click', () => {
+    if (confirm('このタスクを削除しますか？\n完了履歴も削除されます。')) {
+      deleteTask('recurring', taskId);
+      closeModal();
+    }
+  });
+}
+
+function openEditLongTermModal(taskId) {
+  const t = state.longTerm.find(x => x.id === taskId);
+  if (!t) return;
+  let title = t.title;
+  let category = t.category;
+  let priority = t.priority;
+
+  const doneCount = (t.completedDates || []).length;
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">長期タスクを編集</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+        <div class="field">
+          <label class="field-label">タスク名</label>
+          <input type="text" id="m-title" value="${escapeHtml(t.title)}">
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <div class="chip-group" id="m-category"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">優先度</label>
+          <div class="chip-group" id="m-priority"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">目標日</label>
+          <input type="date" id="m-deadline" value="${t.deadline || ''}">
+        </div>
+        <div class="field" style="background:var(--surface-2); padding:10px 12px; border-radius:8px; font-size:12px; color:var(--text-2);">
+          これまでに <b>${doneCount}日</b> 取り組みました
+        </div>
+        <div class="modal-actions">
+          <div class="modal-actions-left">
+            <button class="btn btn-danger" id="m-delete">削除</button>
+            <button class="btn btn-archive" id="m-archive">達成して終了</button>
+          </div>
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">キャンセル</button>
+            <button class="btn btn-primary" id="m-save">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
+  makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
+  $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
+  makeChips($('#m-priority'), prioItems, priority, { onChange: v => priority = Number(v) });
+
+  $('#m-title').addEventListener('input', e => title = e.target.value.trim());
+
+  $('#m-save').addEventListener('click', () => {
+    if (!title) return;
+    const deadline = $('#m-deadline').value || null;
+    updateTask('longterm', taskId, { title, category, priority, deadline });
+    closeModal();
+  });
+  $('#m-delete').addEventListener('click', () => {
+    if (confirm('このタスクを削除しますか？')) {
+      deleteTask('longterm', taskId);
+      closeModal();
+    }
+  });
+  $('#m-archive').addEventListener('click', () => {
+    if (confirm('このタスクを「達成して終了」しますか？\nリストから消えます。')) {
+      archiveLongTerm(taskId);
+      closeModal();
+    }
+  });
+}
+
+// ============================================
+// バックアップ / 復元
+// ============================================
+function exportData() {
+  const data = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    oneOff: state.oneOff,
+    recurring: state.recurring,
+    recurringCompletions: state.recurringCompletions,
+    longTerm: state.longTerm,
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const fname = `taskflow-backup-${yyyy}${mm}${dd}.json`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  localStorage.setItem('taskflow_v2_last_backup', new Date().toISOString());
+  return fname;
+}
+
+function importData(jsonStr, mode) {
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error('JSONとして読み込めませんでした');
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('正しいバックアップファイルではありません');
+  }
+  const incoming = {
+    oneOff: Array.isArray(parsed.oneOff) ? parsed.oneOff : [],
+    recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
+    recurringCompletions: Array.isArray(parsed.recurringCompletions) ? parsed.recurringCompletions : [],
+    longTerm: Array.isArray(parsed.longTerm) ? parsed.longTerm : [],
+  };
+
+  if (mode === 'replace') {
+    state.oneOff = incoming.oneOff;
+    state.recurring = incoming.recurring;
+    state.recurringCompletions = incoming.recurringCompletions;
+    state.longTerm = incoming.longTerm;
+  } else {
+    // merge: 既存IDは保持、未知IDのみ追加
+    const existingIds = (arr) => new Set(arr.map(x => x.id));
+    const mergeArr = (existing, add) => {
+      const ids = existingIds(existing);
+      return existing.concat(add.filter(x => x.id && !ids.has(x.id)));
+    };
+    state.oneOff = mergeArr(state.oneOff, incoming.oneOff);
+    state.recurring = mergeArr(state.recurring, incoming.recurring);
+    state.longTerm = mergeArr(state.longTerm, incoming.longTerm);
+    // recurringCompletions は (taskId+date) で重複排除
+    const compKey = c => c.taskId + '|' + c.date;
+    const seen = new Set(state.recurringCompletions.map(compKey));
+    incoming.recurringCompletions.forEach(c => {
+      if (!seen.has(compKey(c))) {
+        state.recurringCompletions.push(c);
+        seen.add(compKey(c));
+      }
+    });
+  }
+  save();
+  render();
+  return {
+    oneOff: incoming.oneOff.length,
+    recurring: incoming.recurring.length,
+    longTerm: incoming.longTerm.length,
+  };
+}
+
+function openBackupModal() {
+  const lastBackup = localStorage.getItem('taskflow_v2_last_backup');
+  let lastBackupText = 'まだバックアップしていません';
+  if (lastBackup) {
+    const d = new Date(lastBackup);
+    const diffMs = Date.now() - d.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) lastBackupText = '今日バックアップ済み';
+    else if (diffDays === 1) lastBackupText = '昨日バックアップ';
+    else lastBackupText = `${diffDays}日前にバックアップ`;
+  }
+
+  const counts = {
+    oneOff: state.oneOff.length,
+    recurring: state.recurring.length,
+    longTerm: state.longTerm.length,
+    completions: state.recurringCompletions.length,
+  };
+
+  $('#modal-root').innerHTML = `
+    <div class="modal-overlay" data-action="close-modal-bg">
+      <div class="modal" data-stop>
+        <div class="modal-header">
+          <div class="modal-title">バックアップ・復元</div>
+          <button class="modal-close" data-action="close-modal">${iconSvg('x')}</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-num">${counts.oneOff}</div>
+            <div class="stat-lbl">単発</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num">${counts.recurring}</div>
+            <div class="stat-lbl">定期</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num">${counts.longTerm}</div>
+            <div class="stat-lbl">長期</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num">${counts.completions}</div>
+            <div class="stat-lbl">完了履歴</div>
+          </div>
+        </div>
+
+        <div class="help-text">
+          状態: <b>${lastBackupText}</b><br>
+          データはお使いのブラウザ内（localStorage）に保存されています。<br>
+          念のため定期的に <b>エクスポート</b> しておくと、ブラウザの履歴削除・PC故障時に復元できます。
+        </div>
+
+        <div id="m-feedback"></div>
+
+        <div class="field">
+          <label class="field-label">エクスポート（保存）</label>
+          <button class="btn btn-primary" id="m-export" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px;">
+            ${iconSvg('download')} JSON ファイルをダウンロード
+          </button>
+        </div>
+
+        <div class="field">
+          <label class="field-label">インポート（復元）</label>
+          <input type="file" id="m-import-file" accept=".json" style="margin-bottom:10px;">
+          <div class="import-modes">
+            <button class="import-mode-btn" id="m-import-merge">
+              <div class="mode-title">追加で読み込む</div>
+              <div class="mode-desc">既存のタスクを残して、ファイル内の新規のみ追加</div>
+            </button>
+            <button class="import-mode-btn" id="m-import-replace">
+              <div class="mode-title">すべて上書き</div>
+              <div class="mode-desc">今のデータを消して、ファイルの内容に置き換え</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" data-action="close-modal">閉じる</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const feedback = (msg, type) => {
+    $('#m-feedback').innerHTML = `<div class="feedback-msg ${type}">${escapeHtml(msg)}</div>`;
+  };
+
+  $('#m-export').addEventListener('click', () => {
+    try {
+      const fname = exportData();
+      feedback(`「${fname}」をダウンロードしました`, 'success');
+    } catch (e) {
+      feedback('エクスポートに失敗しました: ' + e.message, 'error');
+    }
+  });
+
+  const doImport = (mode) => {
+    const fileInput = $('#m-import-file');
+    if (!fileInput.files || fileInput.files.length === 0) {
+      feedback('先にJSONファイルを選択してください', 'error');
+      return;
+    }
+    if (mode === 'replace') {
+      if (!confirm('現在のすべてのタスクを上書きします。よろしいですか？')) return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const result = importData(String(e.target.result), mode);
+        const msg = mode === 'replace'
+          ? `上書き完了：単発 ${result.oneOff} / 定期 ${result.recurring} / 長期 ${result.longTerm}`
+          : `追加完了：単発 ${result.oneOff} / 定期 ${result.recurring} / 長期 ${result.longTerm} を読み込みました（既存タスクはそのまま）`;
+        feedback(msg, 'success');
+      } catch (err) {
+        feedback('読み込み失敗: ' + err.message, 'error');
+      }
+    };
+    reader.onerror = () => feedback('ファイル読み取りに失敗しました', 'error');
+    reader.readAsText(fileInput.files[0]);
+  };
+
+  $('#m-import-merge').addEventListener('click', () => doImport('merge'));
+  $('#m-import-replace').addEventListener('click', () => doImport('replace'));
+}
+
+// ============================================
+// イベント委譲
+// ============================================
+function getPrefillCategory() {
+  return (state.page !== 'dashboard') ? state.page : null;
+}
+
+document.addEventListener('click', (e) => {
+  // Modal close on overlay
+  if (e.target.matches('[data-action="close-modal-bg"]')) {
+    closeModal();
+    return;
+  }
+  // Stop propagation inside modal
+  const stopEl = e.target.closest('[data-stop]');
+
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl) return;
+  const action = actionEl.dataset.action;
+  const id = actionEl.dataset.id;
+
+  switch (action) {
+    case 'navigate':
+      navigate(actionEl.dataset.page);
+      break;
+    case 'add-oneoff':     openAddOneOffModal(getPrefillCategory()); break;
+    case 'add-recurring':  openAddRecurringModal(getPrefillCategory()); break;
+    case 'add-longterm':   openAddLongTermModal(getPrefillCategory()); break;
+    case 'open-backup':    openBackupModal(); break;
+    case 'close-modal':    closeModal(); break;
+    case 'toggle-oneoff':  toggleOneOffComplete(id); break;
+    case 'toggle-istoday-oneoff': e.stopPropagation(); toggleOneOffIsToday(id); break;
+    case 'cycle-prio-oneoff': e.stopPropagation(); cycleOneOffPriority(id); break;
+    case 'cycle-prio-longterm': e.stopPropagation(); cycleLongTermPriority(id); break;
+    case 'toggle-recurring': toggleRecurringComplete(id); break;
+    case 'toggle-longterm-today': toggleLongTermToday(id); break;
+    case 'edit-oneoff':    openEditOneOffModal(id); break;
+    case 'edit-recurring': openEditRecurringModal(id); break;
+    case 'edit-longterm':  openEditLongTermModal(id); break;
+    case 'delete-oneoff':
+      if (confirm('このタスクを削除しますか？')) deleteTask('oneoff', id);
+      break;
+    case 'delete-recurring':
+      if (confirm('このタスクを削除しますか？\n完了履歴も削除されます。')) deleteTask('recurring', id);
+      break;
+    case 'delete-longterm':
+      if (confirm('このタスクを削除しますか？')) deleteTask('longterm', id);
+      break;
+  }
+});
+
+// ESC で閉じる
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ============================================
+// ドラッグ&ドロップ
+// ============================================
+let dragged = null;
+
+document.addEventListener('dragstart', (e) => {
+  const task = e.target.closest('.task');
+  if (!task) return;
+  dragged = {
+    el: task,
+    type: task.dataset.taskType,
+    id: task.dataset.taskId,
+  };
+  task.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+});
+
+document.addEventListener('dragend', (e) => {
+  if (dragged) {
+    dragged.el.classList.remove('dragging');
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    dragged = null;
+  }
+});
+
+document.addEventListener('dragover', (e) => {
+  const task = e.target.closest('.task');
+  if (!task || !dragged) return;
+  if (task.dataset.taskType !== dragged.type) return;
+  if (task.dataset.taskId === dragged.id) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+  task.classList.add('drop-target');
+});
+
+document.addEventListener('drop', (e) => {
+  const task = e.target.closest('.task');
+  if (!task || !dragged) return;
+  if (task.dataset.taskType !== dragged.type) return;
+  if (task.dataset.taskId === dragged.id) return;
+  e.preventDefault();
+  const rect = task.getBoundingClientRect();
+  const position = (e.clientY < rect.top + rect.height / 2) ? 'before' : 'after';
+  reorderTasks(dragged.type, dragged.id, task.dataset.taskId, position);
+});
+
+// ============================================
+// 起動
+// ============================================
+load();
+render();
+
+})();
+</script>
+</body>
 </html>
