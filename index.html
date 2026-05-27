@@ -5,7 +5,7 @@
 <title>📋 タスクフロー</title>
 <style>
   :root {
-    --bg: #FAFAFA;
+    --bg: #FAFAF9;
     --surface: #FFFFFF;
     --surface-2: #F4F4F5;
     --border: #E5E5E5;
@@ -13,22 +13,24 @@
     --text: #18181B;
     --text-2: #52525B;
     --text-muted: #A1A1AA;
-    --accent: #6366F1;
+    --accent: #4F46E5;
     --accent-soft: #EEF2FF;
     --shadow: 0 1px 2px rgba(0,0,0,0.04);
     --shadow-lg: 0 10px 30px rgba(0,0,0,0.10);
 
-    --cat-work: #3B82F6;
-    --cat-skill: #10B981;
-    --cat-personal: #F59E0B;
-    --cat-habit: #EC4899;
-    --cat-other: #8B5CF6;
+    /* Dusty / low-saturation category colors (HSL Lightness ~35%) */
+    --cat-work: #475569;
+    --cat-skill: #0F766E;
+    --cat-personal: #B45309;
+    --cat-habit: #9F1239;
+    --cat-other: #6D28D9;
 
-    --prio-1: #EF4444;
-    --prio-2: #F97316;
-    --prio-3: #EAB308;
-    --prio-4: #3B82F6;
-    --prio-5: #9CA3AF;
+    /* Dusty priority dot colors */
+    --prio-1: #B91C1C;
+    --prio-2: #C2410C;
+    --prio-3: #A16207;
+    --prio-4: #1D4ED8;
+    --prio-5: #71717A;
   }
 
   * { box-sizing: border-box; }
@@ -283,7 +285,13 @@
     font-size: 24px; font-weight: 700;
     letter-spacing: -0.02em;
     margin: 0;
+    display: inline-flex; align-items: center; gap: 10px;
   }
+  .page-title-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-2);
+  }
+  .page-title-icon svg { width: 22px; height: 22px; }
   .page-sub { font-size: 13px; color: var(--text-muted); }
 
   .progress-card {
@@ -413,39 +421,43 @@
   .task-meta .meta-dot { color: var(--text-muted); }
 
   .badge {
-    display: inline-flex; align-items: center; gap: 3px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 600;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
     line-height: 1.5;
-  }
-  .badge-cat {
-    color: white;
-  }
-  .badge-prio {
     background: var(--surface-2);
     color: var(--text-2);
     border: 1px solid var(--border);
-    cursor: pointer;
-    user-select: none;
+    white-space: nowrap;
   }
-  .badge-prio[data-prio="1"] { background: #FEE2E2; color: var(--prio-1); border-color: #FCA5A5; }
-  .badge-prio[data-prio="2"] { background: #FFEDD5; color: var(--prio-2); border-color: #FDBA74; }
-  .badge-prio[data-prio="3"] { background: #FEF3C7; color: var(--prio-3); border-color: #FDE68A; }
-  .badge-prio[data-prio="4"] { background: #DBEAFE; color: var(--prio-4); border-color: #93C5FD; }
-  .badge-prio[data-prio="5"] { background: var(--surface-2); color: var(--prio-5); }
+  .badge-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .badge-cat .badge-dot[data-cat="work"]     { background: var(--cat-work); }
+  .badge-cat .badge-dot[data-cat="skill"]    { background: var(--cat-skill); }
+  .badge-cat .badge-dot[data-cat="personal"] { background: var(--cat-personal); }
+  .badge-cat .badge-dot[data-cat="habit"]    { background: var(--cat-habit); }
+  .badge-cat .badge-dot[data-cat="other"]    { background: var(--cat-other); }
+
+  .badge-prio { cursor: pointer; user-select: none; transition: background 0.12s; }
+  .badge-prio:hover { background: white; border-color: var(--border-strong); }
+  .badge-prio .badge-dot[data-prio="1"] { background: var(--prio-1); }
+  .badge-prio .badge-dot[data-prio="2"] { background: var(--prio-2); }
+  .badge-prio .badge-dot[data-prio="3"] { background: var(--prio-3); }
+  .badge-prio .badge-dot[data-prio="4"] { background: var(--prio-4); }
+  .badge-prio .badge-dot[data-prio="5"] { background: var(--prio-5); }
 
   .badge-today {
-    background: var(--accent-soft); color: var(--accent);
-    border: 1px solid #C7D2FE;
-    cursor: pointer;
+    cursor: pointer; transition: background 0.12s;
   }
-  .badge-deadline {
-    background: var(--surface-2);
-    color: var(--text-2);
-    border: 1px solid var(--border);
-  }
+  .badge-today:hover { background: white; border-color: var(--border-strong); }
+  .badge-today.is-today { color: var(--accent); border-color: #C7D2FE; background: var(--accent-soft); }
+
+  .badge-deadline { white-space: nowrap; }
 
   .task-actions {
     display: flex; gap: 4px; align-items: center;
@@ -589,8 +601,8 @@
   .btn-archive:hover { background: #ECFDF5; }
 
   /* --- Misc --- */
-  .deadline-warn { color: #DC2626; font-weight: 600; }
-  .deadline-soon { color: #D97706; font-weight: 600; }
+  .badge-deadline.deadline-warn { color: #B91C1C; border-color: #FCA5A5; background: #FEF2F2; }
+  .badge-deadline.deadline-soon { color: #B45309; border-color: #FDE68A; background: #FFFBEB; }
 
   .freq-label {
     font-size: 10px; color: var(--text-muted); font-weight: 500;
@@ -602,23 +614,30 @@
   }
   .empty-page h2 { font-size: 16px; margin: 0 0 6px; color: var(--text-2); }
 
-  /* Sidebar category color marker */
-  .cat-marker {
-    width: 10px; height: 10px;
-    border-radius: 3px;
+  /* Nav icon (Lucide line) */
+  .nav-icon {
+    width: 18px; height: 18px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+  }
+  .nav-icon svg { width: 18px; height: 18px; }
+  .nav-item.active .nav-icon { color: var(--accent); }
+
+  /* Brand icon */
+  .brand-icon-new {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--text);
+    display: grid; place-items: center;
+    color: white;
     flex-shrink: 0;
   }
-  .cat-marker[data-cat="work"] { background: var(--cat-work); }
-  .cat-marker[data-cat="skill"] { background: var(--cat-skill); }
-  .cat-marker[data-cat="personal"] { background: var(--cat-personal); }
-  .cat-marker[data-cat="habit"] { background: var(--cat-habit); }
-  .cat-marker[data-cat="other"] { background: var(--cat-other); }
+  .brand-icon-new svg { width: 18px; height: 18px; }
 
-  .badge-cat[data-cat="work"] { background: var(--cat-work); }
-  .badge-cat[data-cat="skill"] { background: var(--cat-skill); }
-  .badge-cat[data-cat="personal"] { background: var(--cat-personal); }
-  .badge-cat[data-cat="habit"] { background: var(--cat-habit); }
-  .badge-cat[data-cat="other"] { background: var(--cat-other); }
+  /* Chip cat icon (modal) */
+  .chip-icon { width: 14px; height: 14px; display: inline-block; vertical-align: -2px; margin-right: 4px; }
+  .chip-icon svg { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
@@ -636,11 +655,11 @@
 // 定数
 // ============================================
 const CATEGORIES = [
-  { id: 'work',     label: '仕事',         emoji: '💼' },
-  { id: 'skill',    label: 'スキル',       emoji: '📚' },
-  { id: 'personal', label: 'プライベート', emoji: '👤' },
-  { id: 'habit',    label: '習慣',         emoji: '💖' },
-  { id: 'other',    label: 'その他',       emoji: '🏷' },
+  { id: 'work',     label: '仕事',         icon: 'briefcase' },
+  { id: 'skill',    label: 'スキル',       icon: 'book' },
+  { id: 'personal', label: 'プライベート', icon: 'user' },
+  { id: 'habit',    label: '習慣',         icon: 'heart' },
+  { id: 'other',    label: 'その他',       icon: 'tag' },
 ];
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.id, c.label]));
 
@@ -979,8 +998,24 @@ function iconSvg(name) {
     case 'backup': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
     case 'upload': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
     case 'download': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+
+    /* nav / sidebar / dashboard */
+    case 'dashboard': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+    case 'logo':      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+
+    /* category icons (Lucide) */
+    case 'briefcase': return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>';
+    case 'book':      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
+    case 'user':      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    case 'heart':     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+    case 'tag':       return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
   }
   return '';
+}
+
+function catIconSvg(catId) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  return cat ? iconSvg(cat.icon) : '';
 }
 
 function renderSidebar() {
@@ -988,7 +1023,7 @@ function renderSidebar() {
 
   let nav = `
     <button class="nav-item ${state.page === 'dashboard' ? 'active' : ''}" data-action="navigate" data-page="dashboard">
-      <span class="nav-emoji">▸</span>
+      <span class="nav-icon">${iconSvg('dashboard')}</span>
       <span class="nav-label">ダッシュボード</span>
     </button>
     <div class="nav-section-label">カテゴリ</div>
@@ -997,7 +1032,7 @@ function renderSidebar() {
     const p = categoryProgress(c.id);
     nav += `
       <button class="nav-item ${state.page === c.id ? 'active' : ''}" data-action="navigate" data-page="${c.id}">
-        <span class="nav-emoji">${c.emoji}</span>
+        <span class="nav-icon">${iconSvg(c.icon)}</span>
         <span class="nav-label">${c.label}</span>
         <span class="nav-count">${p.done}/${p.total}</span>
       </button>
@@ -1007,7 +1042,7 @@ function renderSidebar() {
   $('#sidebar').innerHTML = `
     <div class="sidebar-header">
       <div class="brand">
-        <div class="brand-icon">📋</div>
+        <div class="brand-icon-new">${iconSvg('logo')}</div>
         <div class="brand-title">タスクフロー</div>
       </div>
       <div class="brand-date">${todayJp}</div>
@@ -1042,7 +1077,6 @@ function renderTaskListByCategory(tasks, renderer) {
       <div class="cat-subgroup">
         <div class="cat-subgroup-header">
           <span class="cat-dot" style="background: var(--cat-${c.id});"></span>
-          <span>${c.emoji}</span>
           <span class="cat-name">${c.label}</span>
           <span class="cat-count">${list.length}</span>
         </div>
@@ -1062,9 +1096,11 @@ function renderOneOffTask(t) {
       <div class="task-body" data-action="edit-oneoff" data-id="${t.id}">
         <div class="task-title">${escapeHtml(t.title)}</div>
         <div class="task-meta">
-          <span class="badge badge-cat" data-cat="${t.category}">${escapeHtml(catLabel)}</span>
-          <span class="badge badge-prio" data-prio="${t.priority}" data-action="cycle-prio-oneoff" data-id="${t.id}" title="クリックで優先度変更">優${t.priority}</span>
-          ${t.isToday && !done ? `<span class="badge badge-today" data-action="toggle-istoday-oneoff" data-id="${t.id}" title="クリックであとで">今日</span>` : !done ? `<span class="badge badge-today" data-action="toggle-istoday-oneoff" data-id="${t.id}" style="background:var(--surface-2);color:var(--text-muted);border-color:var(--border);" title="クリックで今日">あとで</span>` : ''}
+          <span class="badge badge-cat"><span class="badge-dot" data-cat="${t.category}"></span>${escapeHtml(catLabel)}</span>
+          <span class="badge badge-prio" data-action="cycle-prio-oneoff" data-id="${t.id}" title="クリックで優先度変更"><span class="badge-dot" data-prio="${t.priority}"></span>優${t.priority}</span>
+          ${!done ? (t.isToday
+            ? `<span class="badge badge-today is-today" data-action="toggle-istoday-oneoff" data-id="${t.id}" title="クリックであとで">今日</span>`
+            : `<span class="badge badge-today" data-action="toggle-istoday-oneoff" data-id="${t.id}" title="クリックで今日">あとで</span>`) : ''}
         </div>
       </div>
       <div class="task-actions">
@@ -1092,7 +1128,7 @@ function renderRecurringTask(t) {
       <div class="task-body" data-action="edit-recurring" data-id="${t.id}">
         <div class="task-title">${escapeHtml(t.title)}</div>
         <div class="task-meta">
-          <span class="badge badge-cat" data-cat="${t.category}">${escapeHtml(catLabel)}</span>
+          <span class="badge badge-cat"><span class="badge-dot" data-cat="${t.category}"></span>${escapeHtml(catLabel)}</span>
           <span class="freq-label">${escapeHtml(freqDesc)}</span>
         </div>
       </div>
@@ -1126,8 +1162,8 @@ function renderLongTermTask(t) {
       <div class="task-body" data-action="edit-longterm" data-id="${t.id}">
         <div class="task-title">${escapeHtml(t.title)}</div>
         <div class="task-meta">
-          <span class="badge badge-cat" data-cat="${t.category}">${escapeHtml(catLabel)}</span>
-          <span class="badge badge-prio" data-prio="${t.priority}" data-action="cycle-prio-longterm" data-id="${t.id}" title="クリックで優先度変更">優${t.priority}</span>
+          <span class="badge badge-cat"><span class="badge-dot" data-cat="${t.category}"></span>${escapeHtml(catLabel)}</span>
+          <span class="badge badge-prio" data-action="cycle-prio-longterm" data-id="${t.id}" title="クリックで優先度変更"><span class="badge-dot" data-prio="${t.priority}"></span>優${t.priority}</span>
           ${deadlineHtml}
         </div>
       </div>
@@ -1203,7 +1239,7 @@ function renderCategoryPage(cat) {
     ${renderTopbar()}
     <div class="page-content">
       <div class="page-header">
-        <h1 class="page-title">${catInfo.emoji} ${catInfo.label}</h1>
+        <h1 class="page-title"><span class="page-title-icon">${iconSvg(catInfo.icon)}</span>${catInfo.label}</h1>
         <div class="page-sub">${oneOffs.length + recurringsToday.length + longTerms.length} 件のアクティブ</div>
       </div>
 
@@ -1265,7 +1301,7 @@ function openAddOneOffModal(prefillCategory) {
   let priority = 3;
   let isToday = true;
 
-  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.label }));
   const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
 
   $('#modal-root').innerHTML = `
@@ -1368,7 +1404,7 @@ function openAddRecurringModal(prefillCategory) {
     </div>
   `;
 
-  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.label }));
   makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
   $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
 
@@ -1450,7 +1486,7 @@ function openAddLongTermModal(prefillCategory) {
     </div>
   `;
 
-  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.label }));
   const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
   makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
   $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
@@ -1515,7 +1551,7 @@ function openEditOneOffModal(taskId) {
     </div>
   `;
 
-  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.label }));
   const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
   makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
   $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
@@ -1584,7 +1620,7 @@ function openEditRecurringModal(taskId) {
     </div>
   `;
 
-  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.label }));
   makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
   $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
 
@@ -1676,7 +1712,7 @@ function openEditLongTermModal(taskId) {
     </div>
   `;
 
-  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.emoji + ' ' + c.label }));
+  const catItems = CATEGORIES.map(c => ({ id: c.id, label: c.label }));
   const prioItems = [1,2,3,4,5].map(p => ({ id: p, label: `優${p} ${PRIORITY_LABELS[p]}` }));
   makeChips($('#m-category'), catItems, category, { extraClass: 'chip-cat', dataAttr: 'cat', onChange: v => category = v });
   $('#m-category').querySelectorAll('.chip').forEach(c => c.setAttribute('data-cat', c.dataset.val));
