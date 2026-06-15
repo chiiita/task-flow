@@ -70,6 +70,67 @@
     max-width: 980px;
   }
 
+  /* --- スマホ用バー（既定は非表示／PCは現状維持） --- */
+  #mobile-top { display: none; }
+  #bottom-tabs { display: none; }
+
+  @media (max-width: 768px) {
+    #app { display: block; }
+    aside#sidebar { display: none; }
+    main#main { width: 100%; }
+
+    /* 上部バー（タイトル＋ログイン） */
+    #mobile-top {
+      display: flex; align-items: center; gap: 10px;
+      position: sticky; top: 0; z-index: 20;
+      padding: 9px 14px;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .mtop-brand {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 700; flex-shrink: 0;
+    }
+    .mtop-brand svg { width: 22px; height: 22px; }
+    .mtop-cloud { margin-left: auto; min-width: 0; max-width: 64%; }
+    .mtop-cloud .cloud-hint { display: none; }
+    .mtop-cloud .cloud-signin { padding: 7px 11px; font-size: 12px; }
+    .mtop-cloud .cloud-user { padding: 0; }
+    .mtop-cloud .cloud-user-name { font-size: 11.5px; }
+
+    /* 本文は全幅・下タブ分の余白 */
+    .page-content { padding: 16px 16px 96px; max-width: 100%; }
+    .topbar {
+      position: static;
+      padding: 10px 14px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .topbar::-webkit-scrollbar { display: none; }
+    .topbar-btn { padding: 10px 14px; font-size: 13px; }
+
+    /* 下タブバー */
+    #bottom-tabs {
+      display: flex;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 5px 4px calc(5px + env(safe-area-inset-bottom));
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    }
+    .btab {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 5px 2px;
+      color: var(--text-muted);
+      border-radius: 8px;
+    }
+    .btab svg { width: 22px; height: 22px; }
+    .btab-label { font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; }
+    .btab.active { color: var(--accent); }
+  }
+
   /* --- Topbar --- */
   .topbar {
     position: sticky; top: 0; z-index: 10;
@@ -691,10 +752,12 @@
 </style>
 </head>
 <body>
+<header id="mobile-top"></header>
 <div id="app">
   <aside id="sidebar"></aside>
   <main id="main"></main>
 </div>
+<nav id="bottom-tabs"></nav>
 <div id="modal-root"></div>
 
 <script>
@@ -1291,6 +1354,30 @@ function renderSidebar() {
   `;
 }
 
+// スマホ上部バー（タイトル＋ログイン）
+function renderMobileTop() {
+  const el = document.getElementById('mobile-top');
+  if (!el) return;
+  el.innerHTML =
+    '<div class="mtop-brand">' + iconSvg('logo') + '<span>タスクフロー</span></div>'
+    + '<div class="mtop-cloud">' + renderCloudPanel() + '</div>';
+}
+
+// スマホ下タブバー（ホーム＋カテゴリ）
+function renderBottomTabs() {
+  const el = document.getElementById('bottom-tabs');
+  if (!el) return;
+  const SHORT = { dashboard: 'ホーム', work: '仕事', skill: 'スキル', personal: '私用', habit: '習慣', other: 'その他' };
+  const tabs = [{ id: 'dashboard', icon: 'dashboard' }]
+    .concat(CATEGORIES.map(c => ({ id: c.id, icon: c.icon })));
+  el.innerHTML = tabs.map(t =>
+    '<button class="btab ' + (state.page === t.id ? 'active' : '') + '" data-action="navigate" data-page="' + t.id + '">'
+    + '<span class="btab-icon">' + iconSvg(t.icon) + '</span>'
+    + '<span class="btab-label">' + (SHORT[t.id] || t.id) + '</span>'
+    + '</button>'
+  ).join('');
+}
+
 function renderTopbar() {
   return `
     <div class="topbar">
@@ -1495,6 +1582,8 @@ function renderCategoryPage(cat) {
 
 function render() {
   renderSidebar();
+  renderMobileTop();
+  renderBottomTabs();
   if (state.page === 'dashboard') {
     renderDashboard();
   } else {
