@@ -885,7 +885,7 @@ async function cloudSignOut() {
 function adoptCloud(cloud, cUpd) {
   state.oneOff = cloud.oneOff || [];
   state.recurring = cloud.recurring || [];
-  state.recurringCompletions = cloud.recurringCompletions || [];
+  state.recurringCompletions = cloud.recurringCompletions || cloud.completions || [];
   state.longTerm = cloud.longTerm || [];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudPayload()));
   if (cUpd) setLocalUpdatedAt(cUpd);
@@ -931,17 +931,21 @@ function onAuthChanged(user) {
   cloudUnsub = fb.onSnapshot(ref, (snap) => {
     if (snap.metadata.hasPendingWrites) return; // 自分の書き込みエコーは無視
     const cloud = snap.exists() ? snap.data() : null;
-    if (cloud) {
+    const localHas = state.oneOff.length || state.recurring.length
+      || state.recurringCompletions.length || state.longTerm.length;
+    if (firstSnapshot && localHas && localUpdatedAt() === 0) {
+      // この端末は未同期でローカルにタスクあり → ローカルを優先してクラウドへ。
+      // （クラウドに旧バージョンの古いデータが残っていても上書きせず守る）
+      pushCloud(user.uid);
+    } else if (cloud) {
       const cUpd = cloud.updatedAt || 0;
       if (firstSnapshot && localUpdatedAt() > cUpd) {
         pushCloud(user.uid);   // この端末の方が新しい → クラウドへ反映
       } else {
         adoptCloud(cloud, cUpd); // クラウドを採用（他端末からの更新含む）
       }
-    } else if (firstSnapshot) {
-      const has = state.oneOff.length || state.recurring.length
-        || state.recurringCompletions.length || state.longTerm.length;
-      if (has) pushCloud(user.uid); // 初回でクラウドが空 → この端末の内容を初期化アップロード
+    } else if (firstSnapshot && localHas) {
+      pushCloud(user.uid); // クラウドが空 → この端末の内容を初期化アップロード
     }
     firstSnapshot = false;
     cloudReady = true;
